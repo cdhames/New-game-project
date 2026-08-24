@@ -63,6 +63,7 @@ const returnedState = (observations: ObservationRecord[]): CanonicalState => {
     unbankedReward: 0,
     salvagedOpportunityIds: [],
     observations,
+    travelCount: 2,
   };
   state.personalObservations = structuredClone(observations);
   return state;
@@ -110,6 +111,68 @@ describe("deterministic expedition core", () => {
           item.publishedAt <= state.logicalTime,
       ),
     ).toBe(true);
+  });
+
+  it("rejects an immediate empty return without changing canonical state", () => {
+    const begun = applyCommand(createInitialState(1), start());
+    expect(begun.ok).toBe(true);
+    if (!begun.ok) return;
+    const before = serializeCanonicalState(begun.state);
+    const rejected = applyCommand(begun.state, {
+      protocolVersion: 1,
+      commandId: "empty-return",
+      kind: "resolve-return",
+    });
+    expect(rejected).toMatchObject({ ok: false, reason: "expedition-not-underway" });
+    expect(serializeCanonicalState(rejected.state)).toBe(before);
+    expect(rejected.state.resolvedExpeditions).toBe(0);
+    expect(rejected.state.driftDue).toBe(false);
+  });
+
+  it("permits return only after departure and subsequent traversal home", () => {
+    const begun = applyCommand(createInitialState(1), start());
+    expect(begun.ok).toBe(true);
+    if (!begun.ok) return;
+    const departed = applyCommand(begun.state, {
+      protocolVersion: 1,
+      commandId: "depart",
+      kind: "travel",
+      routeId: "r-hs",
+    });
+    expect(departed.ok).toBe(true);
+    if (!departed.ok) return;
+    const returned = applyCommand(departed.state, {
+      protocolVersion: 1,
+      commandId: "come-home",
+      kind: "travel",
+      routeId: "r-hs",
+    });
+    expect(returned.ok).toBe(true);
+    if (!returned.ok) return;
+    expect(createPlayerProjection(returned.state).actions.canResolveReturn).toBe(true);
+    expect(
+      applyCommand(returned.state, {
+        protocolVersion: 1,
+        commandId: "resolve-real-return",
+        kind: "resolve-return",
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("projects globally known topology and legal action affordances without hidden truth", () => {
+    const begun = applyCommand(createInitialState(1), start());
+    expect(begun.ok).toBe(true);
+    if (!begun.ok) return;
+    const projection = createPlayerProjection(begun.state);
+    expect(projection.knownRoutes.length).toBe(DEVELOPMENT_SCENARIO.routes.length - 1);
+    expect(projection.knownRoutes.some((route) => route.id === "r-pf")).toBe(true);
+    expect(projection.knownRoutes.some((route) => route.id === "r-ol")).toBe(false);
+    expect(projection.knownNodeIds).toContain("far-sound");
+    expect(projection.knownNodeIds).not.toContain("last-cairn");
+    expect(projection.actions.traversableRouteIds).toEqual(["r-hg", "r-hs"]);
+    expect(projection.actions.canResolveReturn).toBe(false);
+    expect(projection.actions.publicationRequired).toBe(false);
+    expect(JSON.stringify(projection)).not.toContain('"hidden"');
   });
 
   it("copies mutable Ground truth into canonical state", () => {
@@ -218,7 +281,7 @@ describe("deterministic expedition core", () => {
     if (!begun.ok || !begun.state.expedition) return;
     begun.state.expedition.locationId = "outer-light";
     const projection = createPlayerProjection(begun.state);
-    expect(projection.visibleRoutes.some((route) => route.id === "r-ol")).toBe(false);
+    expect(projection.knownRoutes.some((route) => route.id === "r-ol")).toBe(false);
     expect(
       applyCommand(begun.state, {
         protocolVersion: 1,
@@ -244,14 +307,14 @@ describe("deterministic expedition core", () => {
     if (!begun.ok || !begun.state.expedition) return;
     begun.state.expedition.locationId = "pale-inlet";
     const projection = createPlayerProjection(begun.state);
-    expect(projection.visibleRoutes).toContainEqual({
+    expect(projection.knownRoutes).toContainEqual({
       id: "r-pf",
       a: "pale-inlet",
       b: "far-sound",
     });
     const text = JSON.stringify(projection);
     expect(text).not.toContain('"hidden"');
-    expect(Object.keys(projection.visibleRoutes.find((route) => route.id === "r-pf")!)).toEqual([
+    expect(Object.keys(projection.knownRoutes.find((route) => route.id === "r-pf")!)).toEqual([
       "id",
       "a",
       "b",
@@ -274,7 +337,7 @@ describe("deterministic expedition core", () => {
     evidence.subjectId = "r-ol";
     begun.state.personalObservations.push(evidence);
     begun.state.expedition.locationId = "outer-light";
-    expect(createPlayerProjection(begun.state).visibleRoutes).toContainEqual({
+    expect(createPlayerProjection(begun.state).knownRoutes).toContainEqual({
       id: "r-ol",
       a: "outer-light",
       b: "last-cairn",
@@ -336,20 +399,23 @@ describe("deterministic expedition core", () => {
       report("report-b", "expedition-b"),
       report("report-a-duplicate", "expedition-a"),
       report("report-incompatible", "expedition-c", { value: "blocked" }),
+      report("report-other-time", "expedition-d", { observedAt: 5 }),
+      report("report-other-revision", "expedition-e", { observedRevision: 1 }),
     ];
     const claims = createPlayerProjection(state).atlas;
-    expect(claims.find((claim) => claim.reportId === "report-a")?.independentCorroboration).toBe(1);
-    expect(claims.find((claim) => claim.reportId === "report-b")?.independentCorroboration).toBe(1);
+    expect(claims.find((claim) => claim.reportId === "report-a")?.independentCorroboration).toBe(2);
+    expect(claims.find((claim) => claim.reportId === "report-b")?.independentCorroboration).toBe(2);
     expect(
       claims.find((claim) => claim.reportId === "report-a-duplicate")?.independentCorroboration,
-    ).toBe(1);
+    ).toBe(2);
     expect(
       claims.find((claim) => claim.reportId === "report-incompatible")?.independentCorroboration,
     ).toBe(0);
-    state.reports.push(report("report-other-time", "expedition-d", { observedAt: 5 }));
     expect(
-      createPlayerProjection(state).atlas.find((claim) => claim.reportId === "report-other-time")
-        ?.independentCorroboration,
+      claims.find((claim) => claim.reportId === "report-other-time")?.independentCorroboration,
+    ).toBe(2);
+    expect(
+      claims.find((claim) => claim.reportId === "report-other-revision")?.independentCorroboration,
     ).toBe(0);
   });
 

@@ -57,6 +57,7 @@ export const RejectionReasonSchema = z.enum([
   "invalid-observation-subject",
   "opportunity-unavailable",
   "not-at-waystation",
+  "expedition-not-underway",
   "observation-ineligible",
   "publication-limit",
   "duplicate-command",
@@ -93,11 +94,25 @@ export interface AtlasClaim extends ReportRecord {
   potentiallyStale: boolean;
   independentCorroboration: number;
 }
-export interface SafeRouteDescriptor {
-  id: StableId;
-  a: StableId;
-  b: StableId;
-}
+export const SafeRouteDescriptorSchema = z.object({ id: stableId, a: stableId, b: stableId });
+export type SafeRouteDescriptor = z.infer<typeof SafeRouteDescriptorSchema>;
+export const ObservationAffordanceSchema = z.object({
+  subjectId: stableId,
+  category: ObservationCategorySchema,
+});
+export type ObservationAffordance = z.infer<typeof ObservationAffordanceSchema>;
+export const ActionAffordancesSchema = z.object({
+  traversableRouteIds: z.array(stableId),
+  observations: z.array(ObservationAffordanceSchema),
+  salvageableOpportunityIds: z.array(stableId),
+  canResolveReturn: z.boolean(),
+  failureReason: z.enum(["stranded", "integrity"]).nullable(),
+  publicationEligibleObservationIds: z.array(stableId),
+  publicationRequired: z.boolean(),
+  canAdvanceDrift: z.boolean(),
+  canStartExpedition: z.boolean(),
+});
+export type ActionAffordances = z.infer<typeof ActionAffordancesSchema>;
 export interface PlayerSafeProjection {
   protocolVersion: typeof PROTOCOL_VERSION;
   scenarioVersion: ScenarioVersion;
@@ -109,7 +124,11 @@ export interface PlayerSafeProjection {
   supply: number;
   integrity: number;
   selectedInstruments: Instrument[];
-  visibleRoutes: SafeRouteDescriptor[];
+  knownRoutes: SafeRouteDescriptor[];
+  knownNodeIds: StableId[];
+  visitedNodeIds: StableId[];
+  previousLocationId: StableId | null;
+  actions: ActionAffordances;
   observations: ObservationRecord[];
   atlas: AtlasClaim[];
   traces: TraceRecord[];

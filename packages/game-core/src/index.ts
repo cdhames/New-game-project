@@ -1,5 +1,6 @@
 import {
   PROTOCOL_VERSION,
+  type ActionAffordances,
   type AtlasClaim,
   type DomainEvent,
   type EvidenceQuality,
@@ -58,6 +59,7 @@ export interface ExpeditionState {
   previousLocationId: StableId | null;
   visited: StableId[];
   observations: ObservationRecord[];
+  travelCount: number;
   unbankedReward: number;
   salvagedOpportunityIds: StableId[];
 }
@@ -285,6 +287,102 @@ function observationApplicability(
   return "invalid";
 }
 
+function canStartExpedition(state: CanonicalState): boolean {
+  return (state.phase === "idle" || state.phase === "failed") && !state.driftDue;
+}
+
+function canResolveReturn(state: CanonicalState, scenario: Scenario): boolean {
+  return (
+    state.phase === "expedition" &&
+    state.expedition !== null &&
+    state.expedition.locationId === scenario.waystationId &&
+    state.expedition.travelCount >= 2
+  );
+}
+
+function eligibleFailureReason(state: CanonicalState): "stranded" | "integrity" | null {
+  if (state.phase !== "expedition" || !state.expedition) return null;
+  if (state.expedition.integrity <= 0) return "integrity";
+  return canContinueOrReturn(state) ? null : "stranded";
+}
+
+function actionAffordances(
+  state: CanonicalState,
+  scenario = DEVELOPMENT_SCENARIO,
+): ActionAffordances {
+  const expedition = state.expedition;
+  const traversableRouteIds =
+    state.phase === "expedition" && expedition && expedition.supply > 0
+      ? state.world.routes
+          .filter(
+            (route) =>
+              knownRouteIds(state).has(route.id) &&
+              (route.a === expedition.locationId || route.b === expedition.locationId),
+          )
+          .map((route) => route.id)
+          .sort(compareCodeUnits)
+      : [];
+  const observations =
+    state.phase === "expedition" && expedition && expedition.supply > 0
+      ? [
+          ...state.world.routes.flatMap((route) =>
+            ["route", "hazard", "condition"].flatMap((category) =>
+              observationApplicability(
+                state,
+                expedition.locationId,
+                route.id,
+                category as ObservationCategory,
+              ) === "valid" &&
+              expedition.instruments.includes(methodFor[category as ObservationCategory])
+                ? [{ subjectId: route.id, category: category as ObservationCategory }]
+                : [],
+            ),
+          ),
+          ...state.world.nodes.flatMap((node) =>
+            ["hazard", "condition", "opportunity"].flatMap((category) =>
+              observationApplicability(
+                state,
+                expedition.locationId,
+                node.id,
+                category as ObservationCategory,
+              ) === "valid" &&
+              expedition.instruments.includes(methodFor[category as ObservationCategory])
+                ? [{ subjectId: node.id, category: category as ObservationCategory }]
+                : [],
+            ),
+          ),
+        ].sort((a, b) =>
+          compareCodeUnits(`${a.subjectId}:${a.category}`, `${b.subjectId}:${b.category}`),
+        )
+      : [];
+  const salvageableOpportunityIds =
+    state.phase === "expedition" && expedition && expedition.supply > 0
+      ? state.world.nodes
+          .filter(
+            (node) =>
+              node.id === expedition.locationId &&
+              node.category === "opportunity" &&
+              node.opportunity > 0 &&
+              !expedition.salvagedOpportunityIds.includes(node.id),
+          )
+          .map((node) => node.id)
+      : [];
+  return {
+    traversableRouteIds,
+    observations,
+    salvageableOpportunityIds,
+    canResolveReturn: canResolveReturn(state, scenario),
+    failureReason: eligibleFailureReason(state),
+    publicationEligibleObservationIds:
+      state.phase === "returned" && expedition
+        ? [...new Set(expedition.observations.map((item) => item.id))].sort(compareCodeUnits)
+        : [],
+    publicationRequired: state.phase === "returned",
+    canAdvanceDrift: state.driftDue && state.phase !== "expedition" && state.phase !== "returned",
+    canStartExpedition: canStartExpedition(state),
+  };
+}
+
 export function applyCommand(
   state: CanonicalState,
   command: PlayerCommand,
@@ -310,6 +408,7 @@ export function applyCommand(
       previousLocationId: null,
       visited: [scenario.waystationId],
       observations: [],
+      travelCount: 0,
       unbankedReward: 0,
       salvagedOpportunityIds: [],
     };
@@ -328,7 +427,7 @@ export function applyCommand(
     const expedition = state.expedition;
     if (state.phase !== "expedition" || !expedition) return reject(state, "wrong-phase");
     const route = routeAt(state.world, expedition.locationId, command.routeId);
-    if (!route || !knownRouteIds(state).has(command.routeId))
+    if (!route || !actionAffordances(state, scenario).traversableRouteIds.includes(command.routeId))
       return reject(state, "route-unavailable");
     if (expedition.supply < 1) return reject(state, "insufficient-supply");
     const roll = nextRandom(next.rng);
@@ -337,6 +436,7 @@ export function applyCommand(
     const target = otherEnd(route, expedition.locationId);
     const mutable = next.expedition!;
     mutable.supply -= 1;
+    mutable.travelCount += 1;
     mutable.previousLocationId = mutable.locationId;
     mutable.locationId = target;
     mutable.visited.push(target);
@@ -402,7 +502,8 @@ export function applyCommand(
       node.id !== command.opportunityId ||
       node.category !== "opportunity" ||
       node.opportunity <= 0 ||
-      expedition.salvagedOpportunityIds.includes(node.id)
+      expedition.salvagedOpportunityIds.includes(node.id) ||
+      !actionAffordances(state, scenario).salvageableOpportunityIds.includes(node.id)
     )
       return reject(state, "opportunity-unavailable");
     if (expedition.supply < 1) return reject(state, "insufficient-supply");
@@ -424,6 +525,7 @@ export function applyCommand(
     const expedition = state.expedition;
     if (state.phase !== "expedition" || !expedition) return reject(state, "wrong-phase");
     if (expedition.locationId !== scenario.waystationId) return reject(state, "not-at-waystation");
+    if (!canResolveReturn(state, scenario)) return reject(state, "expedition-not-underway");
     next.phase = "returned";
     next.bankedReward += expedition.unbankedReward;
     next.personalObservations.push(...expedition.observations);
@@ -442,9 +544,7 @@ export function applyCommand(
   }
   if (command.kind === "resolve-failure") {
     if (state.phase !== "expedition" || !state.expedition) return reject(state, "wrong-phase");
-    if (command.reason === "integrity" && state.expedition.integrity > 0)
-      return reject(state, "failure-not-eligible");
-    if (command.reason === "stranded" && canContinueOrReturn(state))
+    if (eligibleFailureReason(state) !== command.reason)
       return reject(state, "failure-not-eligible");
     fail(next, scenario, command.reason);
     return {
@@ -599,8 +699,7 @@ function compatibleReports(report: ReportRecord, reports: ReportRecord[]): Repor
       candidate.subjectId === report.subjectId &&
       candidate.category === report.category &&
       candidate.value === report.value &&
-      candidate.observedRevision === report.observedRevision &&
-      candidate.observedAt === report.observedAt,
+      candidate.observedRevision === report.observedRevision,
   );
 }
 export function createPlayerProjection(
@@ -610,10 +709,13 @@ export function createPlayerProjection(
   const expedition = state.expedition;
   const location = expedition?.locationId ?? scenario.waystationId;
   const known = knownRouteIds(state);
-  const visibleRoutes: SafeRouteDescriptor[] = state.world.routes
-    .filter((route) => known.has(route.id) && (route.a === location || route.b === location))
+  const knownRoutes: SafeRouteDescriptor[] = state.world.routes
+    .filter((route) => known.has(route.id))
     .map((route) => ({ id: route.id, a: route.a, b: route.b }))
     .sort((a, b) => compareCodeUnits(a.id, b.id));
+  const knownNodeIds = [
+    ...new Set([scenario.waystationId, ...knownRoutes.flatMap((route) => [route.a, route.b])]),
+  ].sort(compareCodeUnits);
   const observations = new Map<StableId, ObservationRecord>();
   for (const item of [...state.personalObservations, ...(expedition?.observations ?? [])])
     observations.set(item.id, item);
@@ -637,7 +739,11 @@ export function createPlayerProjection(
     supply: expedition?.supply ?? 0,
     integrity: expedition?.integrity ?? 0,
     selectedInstruments: expedition?.instruments ?? [],
-    visibleRoutes,
+    knownRoutes,
+    knownNodeIds,
+    visitedNodeIds: expedition ? [...new Set(expedition.visited)] : [],
+    previousLocationId: expedition?.previousLocationId ?? null,
+    actions: actionAffordances(state, scenario),
     observations: [...observations.values()],
     atlas,
     traces: structuredClone(state.traces),
