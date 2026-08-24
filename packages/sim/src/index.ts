@@ -63,19 +63,34 @@ export interface CommandReplayRejection {
 }
 export type CommandReplayResult = CommandReplaySuccess | CommandReplayRejection;
 
-export class SimulationInvariantError extends Error {
-  readonly context: {
-    policy: PolicyName;
-    seed: number;
-    decisionStep: number;
-    command: PlayerCommand;
-    rejectionReason: RejectionReason;
-    stateChecksum: string;
-    replay: ReplayRecord;
-  };
+type SimulationInvariantContext =
+  | {
+      kind: "contradictory-affordances";
+      phase: PlayerSafeProjection["phase"];
+      locationId: StableId;
+      canResolveReturn: true;
+      failureReason: "stranded" | "integrity";
+    }
+  | {
+      kind: "command-rejection";
+      policy: PolicyName;
+      seed: number;
+      decisionStep: number;
+      command: PlayerCommand;
+      rejectionReason: RejectionReason;
+      stateChecksum: string;
+      replay: ReplayRecord;
+    };
 
-  constructor(context: SimulationInvariantError["context"]) {
-    super(`Simulation command rejected: ${context.rejectionReason}`);
+export class SimulationInvariantError extends Error {
+  readonly context: SimulationInvariantContext;
+
+  constructor(context: SimulationInvariantContext) {
+    super(
+      context.kind === "command-rejection"
+        ? `Simulation command rejected: ${context.rejectionReason}`
+        : `Simulation projection advertised both return and ${context.failureReason} failure`,
+    );
     this.name = "SimulationInvariantError";
     this.context = context;
   }
@@ -96,6 +111,15 @@ function command(
 }
 
 export function legalCommands(view: PlayerSafeProjection, sequence: number): PlayerCommand[] {
+  if (view.actions.canResolveReturn && view.actions.failureReason) {
+    throw new SimulationInvariantError({
+      kind: "contradictory-affordances",
+      phase: view.phase,
+      locationId: view.locationId,
+      canResolveReturn: true,
+      failureReason: view.actions.failureReason,
+    });
+  }
   const commands: PlayerCommand[] = [];
   const add = (kind: PlayerCommand["kind"], extra: Record<string, unknown> = {}): void => {
     commands.push(command(kind, sequence, commands.length + 1, extra));
@@ -273,6 +297,7 @@ export function runExpedition(policy: PolicyName, seed: number, stepLimit = 40):
     if (!result.ok) {
       const terminalChecksum = checksum(serializeCanonicalState(state));
       throw new SimulationInvariantError({
+        kind: "command-rejection",
         policy,
         seed,
         decisionStep: steps,

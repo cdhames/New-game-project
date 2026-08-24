@@ -300,9 +300,13 @@ function canResolveReturn(state: CanonicalState, scenario: Scenario): boolean {
   );
 }
 
-function eligibleFailureReason(state: CanonicalState): "stranded" | "integrity" | null {
+function eligibleFailureReason(
+  state: CanonicalState,
+  scenario: Scenario,
+): "stranded" | "integrity" | null {
   if (state.phase !== "expedition" || !state.expedition) return null;
   if (state.expedition.integrity <= 0) return "integrity";
+  if (canResolveReturn(state, scenario)) return null;
   return canContinueOrReturn(state) ? null : "stranded";
 }
 
@@ -323,7 +327,10 @@ function actionAffordances(
           .sort(compareCodeUnits)
       : [];
   const observations =
-    state.phase === "expedition" && expedition && expedition.supply > 0
+    state.phase === "expedition" &&
+    expedition &&
+    expedition.travelCount > 0 &&
+    expedition.supply > 0
       ? [
           ...state.world.routes.flatMap((route) =>
             ["route", "hazard", "condition"].flatMap((category) =>
@@ -356,7 +363,10 @@ function actionAffordances(
         )
       : [];
   const salvageableOpportunityIds =
-    state.phase === "expedition" && expedition && expedition.supply > 0
+    state.phase === "expedition" &&
+    expedition &&
+    expedition.travelCount > 0 &&
+    expedition.supply > 0
       ? state.world.nodes
           .filter(
             (node) =>
@@ -372,7 +382,7 @@ function actionAffordances(
     observations,
     salvageableOpportunityIds,
     canResolveReturn: canResolveReturn(state, scenario),
-    failureReason: eligibleFailureReason(state),
+    failureReason: eligibleFailureReason(state, scenario),
     publicationEligibleObservationIds:
       state.phase === "returned" && expedition
         ? [...new Set(expedition.observations.map((item) => item.id))].sort(compareCodeUnits)
@@ -463,6 +473,7 @@ export function applyCommand(
   if (command.kind === "observe") {
     const expedition = state.expedition;
     if (state.phase !== "expedition" || !expedition) return reject(state, "wrong-phase");
+    if (expedition.travelCount === 0) return reject(state, "expedition-not-underway");
     const applicability = observationApplicability(
       state,
       expedition.locationId,
@@ -496,6 +507,7 @@ export function applyCommand(
   if (command.kind === "salvage") {
     const expedition = state.expedition;
     if (state.phase !== "expedition" || !expedition) return reject(state, "wrong-phase");
+    if (expedition.travelCount === 0) return reject(state, "expedition-not-underway");
     const node = state.world.nodes.find((item) => item.id === expedition.locationId);
     if (
       !node ||
@@ -544,7 +556,7 @@ export function applyCommand(
   }
   if (command.kind === "resolve-failure") {
     if (state.phase !== "expedition" || !state.expedition) return reject(state, "wrong-phase");
-    if (eligibleFailureReason(state) !== command.reason)
+    if (eligibleFailureReason(state, scenario) !== command.reason)
       return reject(state, "failure-not-eligible");
     fail(next, scenario, command.reason);
     return {

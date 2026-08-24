@@ -13,6 +13,7 @@ import {
   legalCommands,
   replayCommands,
   runExpedition,
+  SimulationInvariantError,
   smokeStudy,
   type PolicyName,
 } from "./index.js";
@@ -61,6 +62,23 @@ describe("player-safe action contract", () => {
       }
     }
   });
+
+  it("raises a structured invariant error for contradictory return and failure affordances", () => {
+    const projection = createPlayerProjection(createInitialState(31));
+    projection.actions.canResolveReturn = true;
+    projection.actions.failureReason = "stranded";
+    try {
+      legalCommands(projection, 1);
+      throw new Error("Expected contradictory affordances to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(SimulationInvariantError);
+      expect((error as SimulationInvariantError).context).toMatchObject({
+        kind: "contradictory-affordances",
+        canResolveReturn: true,
+        failureReason: "stranded",
+      });
+    }
+  });
 });
 
 describe("headless simulation", () => {
@@ -71,6 +89,15 @@ describe("headless simulation", () => {
       const runs = Array.from({ length: 100 }, (_, index) => runExpedition(policy, 20_000 + index));
       expect(runs.every((run) => run.rejectedCommandCount === 0)).toBe(true);
       expect(runs.every((run) => !run.timedOut)).toBe(true);
+      for (const run of runs) {
+        let state = createInitialState(run.replay.seed);
+        for (const command of run.replay.commands) {
+          if (command.kind === "resolve-failure" && command.reason === "stranded") {
+            expect(createPlayerProjection(state).actions.canResolveReturn).toBe(false);
+          }
+          state = accepted(state, command);
+        }
+      }
     });
   }
 

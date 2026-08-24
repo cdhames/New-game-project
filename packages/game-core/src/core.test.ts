@@ -129,6 +129,53 @@ describe("deterministic expedition core", () => {
     expect(rejected.state.driftDue).toBe(false);
   });
 
+  it("blocks resource actions before departure without changing canonical state", () => {
+    const begun = applyCommand(createInitialState(1), start());
+    expect(begun.ok).toBe(true);
+    if (!begun.ok) return;
+    const before = serializeCanonicalState(begun.state);
+    const projection = createPlayerProjection(begun.state);
+    expect(projection.actions.traversableRouteIds).toEqual(["r-hg", "r-hs"]);
+    expect(projection.actions.observations).toEqual([]);
+    expect(projection.actions.salvageableOpportunityIds).toEqual([]);
+    expect(projection.actions.canResolveReturn).toBe(false);
+    expect(projection.actions.failureReason).toBeNull();
+    const observe = applyCommand(begun.state, {
+      protocolVersion: 1,
+      commandId: "premature-observe",
+      kind: "observe",
+      subjectId: "r-hs",
+      category: "route",
+    });
+    const salvage = applyCommand(begun.state, {
+      protocolVersion: 1,
+      commandId: "premature-salvage",
+      kind: "salvage",
+      opportunityId: "shoal",
+    });
+    expect(observe).toMatchObject({ ok: false, reason: "expedition-not-underway" });
+    expect(salvage).toMatchObject({ ok: false, reason: "expedition-not-underway" });
+    expect(serializeCanonicalState(observe.state)).toBe(before);
+    expect(serializeCanonicalState(salvage.state)).toBe(before);
+  });
+
+  it("advertises normal Observation and salvage actions after departure", () => {
+    const begun = applyCommand(createInitialState(1), start());
+    expect(begun.ok).toBe(true);
+    if (!begun.ok) return;
+    const departed = applyCommand(begun.state, {
+      protocolVersion: 1,
+      commandId: "depart-for-actions",
+      kind: "travel",
+      routeId: "r-hs",
+    });
+    expect(departed.ok).toBe(true);
+    if (!departed.ok) return;
+    const actions = createPlayerProjection(departed.state).actions;
+    expect(actions.observations).toContainEqual({ subjectId: "r-hs", category: "route" });
+    expect(actions.salvageableOpportunityIds).toContain("shoal");
+  });
+
   it("permits return only after departure and subsequent traversal home", () => {
     const begun = applyCommand(createInitialState(1), start());
     expect(begun.ok).toBe(true);
@@ -157,6 +204,56 @@ describe("deterministic expedition core", () => {
         kind: "resolve-return",
       }).ok,
     ).toBe(true);
+  });
+
+  it("resolves a legitimate zero-supply return instead of stranded failure", () => {
+    const begun = applyCommand(createInitialState(1), start());
+    expect(begun.ok).toBe(true);
+    if (!begun.ok) return;
+    const departed = applyCommand(begun.state, {
+      protocolVersion: 1,
+      commandId: "zero-supply-depart",
+      kind: "travel",
+      routeId: "r-hs",
+    });
+    expect(departed.ok).toBe(true);
+    if (!departed.ok) return;
+    const home = applyCommand(departed.state, {
+      protocolVersion: 1,
+      commandId: "zero-supply-home",
+      kind: "travel",
+      routeId: "r-hs",
+    });
+    expect(home.ok).toBe(true);
+    if (!home.ok || !home.state.expedition) return;
+    home.state.expedition.supply = 0;
+    home.state.expedition.unbankedReward = 4;
+    home.state.expedition.observations.push(observation("zero-supply-observation"));
+    const projection = createPlayerProjection(home.state);
+    expect(projection.actions.canResolveReturn).toBe(true);
+    expect(projection.actions.failureReason).toBeNull();
+    const beforeFailure = serializeCanonicalState(home.state);
+    const failure = applyCommand(home.state, {
+      protocolVersion: 1,
+      commandId: "reject-stranded-at-home",
+      kind: "resolve-failure",
+      reason: "stranded",
+    });
+    expect(failure).toMatchObject({ ok: false, reason: "failure-not-eligible", events: [] });
+    expect(serializeCanonicalState(failure.state)).toBe(beforeFailure);
+    const resolved = applyCommand(home.state, {
+      protocolVersion: 1,
+      commandId: "resolve-zero-supply-return",
+      kind: "resolve-return",
+    });
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(resolved.state.bankedReward).toBe(4);
+    expect(resolved.state.personalObservations).toContainEqual(
+      observation("zero-supply-observation"),
+    );
+    expect(resolved.state.traces).toEqual([]);
+    expect(resolved.events.map((event) => event.kind)).toEqual(["expedition-returned"]);
   });
 
   it("projects globally known topology and legal action affordances without hidden truth", () => {
@@ -280,6 +377,7 @@ describe("deterministic expedition core", () => {
     expect(begun.ok).toBe(true);
     if (!begun.ok || !begun.state.expedition) return;
     begun.state.expedition.locationId = "outer-light";
+    begun.state.expedition.travelCount = 1;
     const projection = createPlayerProjection(begun.state);
     expect(projection.knownRoutes.some((route) => route.id === "r-ol")).toBe(false);
     expect(
@@ -306,6 +404,7 @@ describe("deterministic expedition core", () => {
     expect(begun.ok).toBe(true);
     if (!begun.ok || !begun.state.expedition) return;
     begun.state.expedition.locationId = "pale-inlet";
+    begun.state.expedition.travelCount = 1;
     const projection = createPlayerProjection(begun.state);
     expect(projection.knownRoutes).toContainEqual({
       id: "r-pf",
@@ -347,7 +446,8 @@ describe("deterministic expedition core", () => {
   it("rejects invalid Observation subject/category combinations deterministically", () => {
     const begun = applyCommand(createInitialState(1), start());
     expect(begun.ok).toBe(true);
-    if (!begun.ok) return;
+    if (!begun.ok || !begun.state.expedition) return;
+    begun.state.expedition.travelCount = 1;
     const invalid = {
       protocolVersion: 1,
       commandId: "invalid-observation",

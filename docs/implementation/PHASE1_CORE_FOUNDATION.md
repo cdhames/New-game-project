@@ -36,8 +36,11 @@ payloads later.
 An Expedition records canonical traversal progress. Resolving a successful return requires at least
 one departure traversal and a subsequent traversal back to the Waystation. An immediate return is
 rejected without advancing logical time, command history, resolved-Expedition counters, Drift, or
-rewards. A returned Expedition is not a complete loop until `publish-reports` succeeds; publishing an
-empty selection remains valid.
+rewards. Before that first traversal, Observation and salvage are likewise unavailable and rejected
+without state change, preventing a player from consuming the resources required to depart. Once a
+legitimate return is available it takes precedence over stranded failure, even at zero supply; the
+return banks eligible findings and never creates a failure Trace. A returned Expedition is not a
+complete loop until `publish-reports` succeeds; publishing an empty selection remains valid.
 
 The RNG is xorshift32 with an unsigned 32-bit serializable state. Rules use integers, ordered arrays,
 stable identifiers, locale-independent UTF-16 code-unit comparison, and recursive key-sorted JSON
@@ -98,6 +101,8 @@ completion, failure and timeout rates, rejected-command totals, decision steps, 
 reward, Observations, Reports, and terminal checksum summaries. A command unexpectedly rejected from
 an advertised affordance raises a structured invariant error with policy, seed, step, command, reason,
 state checksum, and replay context. Reaching the step limit is explicitly classified as a timeout.
+Contradictory return and failure affordances are rejected as a structured simulation invariant before
+a policy can choose either command.
 Every run retains seed, commands, events, RNG start, and terminal checksum. Retained command streams
 are re-applied through `applyCommand`, while retained event streams are folded independently; both
 must reconstruct the terminal checksum.
@@ -106,8 +111,11 @@ The study validates deterministic infrastructure only. It is not a balance concl
 
 ## Validation
 
-Run `pnpm validate` after `pnpm install --frozen-lockfile`. It performs formatting, lint, strict
-TypeScript checking, tests, builds, and the simulation smoke study. CI repeats those checks on pushes
+Run `pnpm validate` after `pnpm install --frozen-lockfile`. Standalone tests and simulation smoke runs
+resolve workspace TypeScript sources through development-only configuration, so they do not depend on
+stale or prebuilt package output; package production exports continue to target `dist`. Validation
+performs formatting, lint, strict TypeScript checking, tests, builds, and the simulation smoke study.
+CI repeats those checks on pushes
 and pull requests using only GitHub-maintained checkout and Node setup actions. CI invokes the pinned
 pnpm release through `npx`, avoiding a third-party package-manager setup action.
 
