@@ -1,0 +1,28 @@
+{
+  "name": "the-long-map",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "build": "tsc -b",
+    "sim:smoke": "pnpm --filter @long-map/sim smoke",
+    "validate": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm sim:smoke"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.10.0",
+    "eslint": "10.9.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.2",
+    "typescript-eslint": "8.67.0",
+    "vitest": "4.1.11"
+  }
+}
