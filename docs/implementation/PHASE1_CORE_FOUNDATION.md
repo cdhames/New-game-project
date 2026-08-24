@@ -61,7 +61,8 @@ The study validates deterministic infrastructure only. It is not a balance concl
 
 Run `pnpm validate` after `pnpm install --frozen-lockfile`. It performs formatting, lint, strict
 TypeScript checking, tests, builds, and the simulation smoke study. CI repeats those checks on pushes
-and pull requests using only GitHub-maintained checkout, Node setup, and pnpm setup actions.
+and pull requests using only GitHub-maintained checkout and Node setup actions. CI invokes the pinned
+pnpm release through `npx`, avoiding a third-party package-manager setup action.
 
 ## Known limitations and deferred work
 
