@@ -11,10 +11,10 @@ Concepts were judged on internet-native necessity, meaningful asynchronous inter
 ## Finalists
 
 - **The Long Map:** short expeditions produce limited Observations; players selectively publish Reports into an aging, corroborated public Atlas over hidden Ground truth.
-- **Archive Shift:** players collectively classify and restore a changing digital archive, with cooperation expressed through prior curatorial choices.
-- **Floodline:** players prepare interconnected districts for recurring environmental change, inheriting consequences from asynchronous plans.
-- **Signal Choir:** players contribute constrained signal fragments to a shared interpretive system that changes what later players can perceive.
-- **Borrowed City:** players temporarily steward spaces whose rules and histories accumulate across many short tenures.
+- **Archive Shift:** strangers sequentially inherit responsibility for a persistent shared machine, station, or settlement for one short operational shift. Each participant makes consequential decisions and leaves the evolving system to later strangers.
+- **Floodline:** players asynchronously manage connected regions in a persistent ecological simulation facing recurrent environmental pressure, with choices in one region affecting the others.
+- **Signal Choir:** players collectively decode an evolving transmission or mystery through constrained fragments, interpretations, and discoveries contributed across many sessions.
+- **Borrowed City:** players successively modify and inhabit one persistent shared settlement whose structures, rules, and history accumulate through many participants.
 
 These summaries describe selection-stage concepts only; rejected concepts are not a source of mechanics or terminology for this project.
 
@@ -24,10 +24,10 @@ The Atlas makes the internet connection foundational: shared knowledge is the pl
 
 ## Why alternatives were rejected
 
-- **Archive Shift** risked turning into content-heavy classification work with a weaker moment-to-moment journey.
-- **Floodline** implied a broader civic simulation and longer feedback loops than a small first playable could validate.
-- **Signal Choir** offered strong atmosphere but less immediately legible decisions and accessibility risks around abstract interpretation.
-- **Borrowed City** required substantially more authored spatial content and governance rules before its distinctive promise could be tested.
+- **Archive Shift** had an internet-native persistent handoff, but individual ownership, mastery, and player-directed purpose were weaker; the experience risked feeling administrative rather than adventurous.
+- **Floodline** offered strong simulation potential, but its feedback loops were slower, its systemic scope was broader, and its immediate emotional hook was weaker for a small first vertical slice.
+- **Signal Choir** offered discovery and atmosphere, but carried high spoiler and solution-leakage risk, depended more heavily on continuing authored mystery content, and could lose replay value once discoveries became widely known.
+- **Borrowed City** was understandable and persistent, but was less distinctive, exposed the project to substantial griefing and governance burdens, and risked becoming a familiar shared-city sandbox rather than a uniquely internet-native game.
 
 The alternatives are rejected, not queued features.
 
