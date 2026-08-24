@@ -48,11 +48,13 @@ export type PlayerCommand = z.infer<typeof PlayerCommandSchema>;
 
 export const RejectionReasonSchema = z.enum([
   "wrong-phase",
+  "drift-required",
   "invalid-loadout",
-  "route-not-connected",
+  "route-unavailable",
   "insufficient-supply",
   "instrument-required",
   "subject-not-local",
+  "invalid-observation-subject",
   "opportunity-unavailable",
   "not-at-waystation",
   "observation-ineligible",
@@ -78,7 +80,6 @@ export interface ReportRecord extends ObservationRecord {
   reportId: StableId;
   sourceClass: SourceClass;
   publishedAt: LogicalTime;
-  corroboratingExpeditionIds: StableId[];
 }
 export interface TraceRecord {
   id: StableId;
@@ -92,17 +93,23 @@ export interface AtlasClaim extends ReportRecord {
   potentiallyStale: boolean;
   independentCorroboration: number;
 }
+export interface SafeRouteDescriptor {
+  id: StableId;
+  a: StableId;
+  b: StableId;
+}
 export interface PlayerSafeProjection {
   protocolVersion: typeof PROTOCOL_VERSION;
   scenarioVersion: ScenarioVersion;
   revision: WorldRevision;
   logicalTime: LogicalTime;
+  driftDue: boolean;
   phase: "idle" | "expedition" | "returned" | "failed";
   locationId: StableId;
   supply: number;
   integrity: number;
   selectedInstruments: Instrument[];
-  visibleRouteIds: StableId[];
+  visibleRoutes: SafeRouteDescriptor[];
   observations: ObservationRecord[];
   atlas: AtlasClaim[];
   traces: TraceRecord[];

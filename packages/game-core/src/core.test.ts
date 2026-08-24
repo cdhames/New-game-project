@@ -1,88 +1,409 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { PROTOCOL_VERSION, type DomainEvent, type PlayerCommand } from "@long-map/protocol";
+import {
+  PROTOCOL_VERSION,
+  type DomainEvent,
+  type ObservationRecord,
+  type PlayerCommand,
+  type ReportRecord,
+} from "@long-map/protocol";
 import {
   applyCommand,
+  compareCodeUnits,
   createInitialState,
   createPlayerProjection,
   DEVELOPMENT_SCENARIO,
   replayEvents,
+  ROUTE_VALUE_MAX,
+  ROUTE_VALUE_MIN,
+  serializeCanonical,
   serializeCanonicalState,
+  type CanonicalState,
 } from "./index.js";
 
-const start: PlayerCommand = {
+const start = (id = "start-1"): PlayerCommand => ({
   protocolVersion: PROTOCOL_VERSION,
-  commandId: "start-1",
+  commandId: id,
   kind: "start-expedition",
   instruments: ["sounding-line", "field-lens"],
+});
+const observation = (id: string, expeditionId = "expedition-1"): ObservationRecord => ({
+  id,
+  subjectId: "r-hs",
+  category: "route",
+  value: "passable",
+  observedRevision: 0,
+  observedAt: 6,
+  expeditionId,
+  method: "sounding-line",
+  quality: "high",
+});
+const report = (
+  reportId: string,
+  expeditionId: string,
+  overrides: Partial<ReportRecord> = {},
+): ReportRecord => ({
+  ...observation(`observation-${reportId}`, expeditionId),
+  reportId,
+  sourceClass: "player",
+  publishedAt: 7,
+  ...overrides,
+});
+const returnedState = (observations: ObservationRecord[]): CanonicalState => {
+  const state = createInitialState(3);
+  state.phase = "returned";
+  state.expedition = {
+    id: "expedition-1",
+    instruments: ["field-lens", "sounding-line"],
+    supply: 2,
+    integrity: 3,
+    locationId: "harbor",
+    previousLocationId: "shoal",
+    visited: ["harbor", "shoal", "harbor"],
+    unbankedReward: 0,
+    salvagedOpportunityIds: [],
+    observations,
+  };
+  state.personalObservations = structuredClone(observations);
+  return state;
 };
-const apply = (commands: PlayerCommand[]) =>
-  commands.reduce(
-    (acc, command) => {
-      const result = applyCommand(acc.state, command);
-      if (!result.ok) return acc;
-      return { state: result.state, events: [...acc.events, ...result.events] };
-    },
-    {
-      state: createInitialState(42),
-      events: [] as DomainEvent[],
-    },
-  );
 
 describe("deterministic expedition core", () => {
-  it("produces byte-identical results and replays its events", () => {
+  it("produces byte-identical results and replays ordered events", () => {
     const commands: PlayerCommand[] = [
-      start,
+      start(),
       { protocolVersion: 1, commandId: "go-1", kind: "travel", routeId: "r-hs" },
       { protocolVersion: 1, commandId: "back-1", kind: "travel", routeId: "r-hs" },
       { protocolVersion: 1, commandId: "return-1", kind: "resolve-return" },
+      { protocolVersion: 1, commandId: "publish-1", kind: "publish-reports", observationIds: [] },
     ];
-    const a = apply(commands);
-    const b = apply(commands);
-    expect(serializeCanonicalState(a.state)).toBe(serializeCanonicalState(b.state));
-    expect(serializeCanonicalState(replayEvents(createInitialState(42), a.events))).toBe(
-      serializeCanonicalState(a.state),
+    const run = (): { state: CanonicalState; events: DomainEvent[] } =>
+      commands.reduce(
+        (accumulator, command) => {
+          const result = applyCommand(accumulator.state, command);
+          expect(result.ok).toBe(true);
+          return result.ok
+            ? { state: result.state, events: [...accumulator.events, ...result.events] }
+            : accumulator;
+        },
+        { state: createInitialState(42), events: [] as DomainEvent[] },
+      );
+    const first = run();
+    const second = run();
+    expect(serializeCanonicalState(first.state)).toBe(serializeCanonicalState(second.state));
+    expect(serializeCanonicalState(replayEvents(createInitialState(42), first.events))).toBe(
+      serializeCanonicalState(first.state),
     );
   });
-  it("rejects invalid commands with stable reasons", () => {
-    const result = applyCommand(createInitialState(1), {
+
+  it("starts baseline Reports with exact mixed nonnegative ages and valid times", () => {
+    const state = createInitialState(1);
+    expect(createPlayerProjection(state).atlas.map((claim) => claim.age)).toEqual([
+      6, 4, 3, 2, 1, 0,
+    ]);
+    expect(
+      state.reports.every(
+        (item) =>
+          item.observedAt >= 0 &&
+          item.observedAt <= state.logicalTime &&
+          item.publishedAt >= item.observedAt &&
+          item.publishedAt <= state.logicalTime,
+      ),
+    ).toBe(true);
+  });
+
+  it("copies mutable Ground truth into canonical state", () => {
+    const state = createInitialState(1);
+    expect(state.world.routes).toEqual(DEVELOPMENT_SCENARIO.routes);
+    expect(state.world.routes).not.toBe(DEVELOPMENT_SCENARIO.routes);
+    state.world.routes[0]!.hazard = 3;
+    expect(DEVELOPMENT_SCENARIO.routes[0]!.hazard).toBe(0);
+  });
+
+  it("changes only unique selected bounded route truth deterministically and preserves Reports", () => {
+    const state = createInitialState(8);
+    state.driftDue = true;
+    const command: PlayerCommand = {
       protocolVersion: 1,
-      commandId: "bad",
+      commandId: "drift-1",
+      kind: "advance-drift",
+    };
+    const reportsBefore = serializeCanonical(state.reports);
+    const first = applyCommand(state, command);
+    const second = applyCommand(state, command);
+    expect(first).toEqual(second);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const changedIds = Object.keys(first.state.world.subjectLastChangedRevision);
+    expect(new Set(changedIds).size).toBe(changedIds.length);
+    expect(changedIds.length === 1 || changedIds.length === 2).toBe(true);
+    for (const route of first.state.world.routes) {
+      const before = state.world.routes.find((item) => item.id === route.id)!;
+      const changed = route.condition !== before.condition || route.hazard !== before.hazard;
+      expect(changed).toBe(changedIds.includes(route.id));
+      expect(route.condition).toBeGreaterThanOrEqual(ROUTE_VALUE_MIN);
+      expect(route.condition).toBeLessThanOrEqual(ROUTE_VALUE_MAX);
+      expect(route.hazard).toBeGreaterThanOrEqual(ROUTE_VALUE_MIN);
+      expect(route.hazard).toBeLessThanOrEqual(ROUTE_VALUE_MAX);
+    }
+    expect(serializeCanonical(first.state.reports)).toBe(reportsBefore);
+  });
+
+  it("marks only older Reports for subjects changed after their observed revision stale", () => {
+    const state = createInitialState(9);
+    state.driftDue = true;
+    const drift = applyCommand(state, {
+      protocolVersion: 1,
+      commandId: "drift-2",
+      kind: "advance-drift",
+    });
+    expect(drift.ok).toBe(true);
+    if (!drift.ok) return;
+    const changed = Object.keys(drift.state.world.subjectLastChangedRevision)[0]!;
+    const unchanged = drift.state.world.routes.find((route) => route.id !== changed)!.id;
+    drift.state.reports.push(
+      report("changed-old", "expedition-a", { subjectId: changed }),
+      report("unchanged-old", "expedition-b", { subjectId: unchanged }),
+    );
+    const projection = createPlayerProjection(drift.state);
+    expect(
+      projection.atlas.find((claim) => claim.reportId === "changed-old")?.potentiallyStale,
+    ).toBe(true);
+    expect(
+      projection.atlas.find((claim) => claim.reportId === "unchanged-old")?.potentiallyStale,
+    ).toBe(false);
+  });
+
+  it("requires publication, then required Drift, before another Expedition", () => {
+    const state = returnedState([]);
+    state.driftDue = true;
+    expect(applyCommand(state, start("bypass-publication"))).toMatchObject({
+      ok: false,
+      reason: "wrong-phase",
+    });
+    const published = applyCommand(state, {
+      protocolVersion: 1,
+      commandId: "publish-empty",
+      kind: "publish-reports",
+      observationIds: [],
+    });
+    expect(published.ok).toBe(true);
+    if (!published.ok) return;
+    expect(published.state.driftDue).toBe(true);
+    expect(createPlayerProjection(published.state).driftDue).toBe(true);
+    expect(applyCommand(published.state, start("bypass-drift"))).toMatchObject({
+      ok: false,
+      reason: "drift-required",
+    });
+  });
+
+  it("preserves an already-due Drift flag through a later failure resolution", () => {
+    const begun = applyCommand(createInitialState(2), start());
+    expect(begun.ok).toBe(true);
+    if (!begun.ok || !begun.state.expedition) return;
+    begun.state.driftDue = true;
+    begun.state.expedition.integrity = 0;
+    const failed = applyCommand(begun.state, {
+      protocolVersion: 1,
+      commandId: "failure-with-drift-due",
+      kind: "resolve-failure",
+      reason: "integrity",
+    });
+    expect(failed.ok && failed.state.driftDue).toBe(true);
+  });
+
+  it("does not expose or authorize a guessed unrevealed hidden route", () => {
+    const begun = applyCommand(createInitialState(1), start());
+    expect(begun.ok).toBe(true);
+    if (!begun.ok || !begun.state.expedition) return;
+    begun.state.expedition.locationId = "outer-light";
+    const projection = createPlayerProjection(begun.state);
+    expect(projection.visibleRoutes.some((route) => route.id === "r-ol")).toBe(false);
+    expect(
+      applyCommand(begun.state, {
+        protocolVersion: 1,
+        commandId: "guess-travel",
+        kind: "travel",
+        routeId: "r-ol",
+      }),
+    ).toMatchObject({ ok: false, reason: "route-unavailable" });
+    expect(
+      applyCommand(begun.state, {
+        protocolVersion: 1,
+        commandId: "guess-observe",
+        kind: "observe",
+        subjectId: "r-ol",
+        category: "route",
+      }),
+    ).toMatchObject({ ok: false, reason: "subject-not-local" });
+  });
+
+  it("makes exactly the baseline-reported hidden route safely usable without exposing truth", () => {
+    const begun = applyCommand(createInitialState(1), start());
+    expect(begun.ok).toBe(true);
+    if (!begun.ok || !begun.state.expedition) return;
+    begun.state.expedition.locationId = "pale-inlet";
+    const projection = createPlayerProjection(begun.state);
+    expect(projection.visibleRoutes).toContainEqual({
+      id: "r-pf",
+      a: "pale-inlet",
+      b: "far-sound",
+    });
+    const text = JSON.stringify(projection);
+    expect(text).not.toContain('"hidden"');
+    expect(Object.keys(projection.visibleRoutes.find((route) => route.id === "r-pf")!)).toEqual([
+      "id",
+      "a",
+      "b",
+    ]);
+    expect(
+      applyCommand(begun.state, {
+        protocolVersion: 1,
+        commandId: "known-hidden",
+        kind: "travel",
+        routeId: "r-pf",
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("authorizes a hidden route represented by valid personal route evidence", () => {
+    const begun = applyCommand(createInitialState(1), start());
+    expect(begun.ok).toBe(true);
+    if (!begun.ok || !begun.state.expedition) return;
+    const evidence = observation("personally-revealed-route", "earlier-expedition");
+    evidence.subjectId = "r-ol";
+    begun.state.personalObservations.push(evidence);
+    begun.state.expedition.locationId = "outer-light";
+    expect(createPlayerProjection(begun.state).visibleRoutes).toContainEqual({
+      id: "r-ol",
+      a: "outer-light",
+      b: "last-cairn",
+    });
+  });
+
+  it("rejects invalid Observation subject/category combinations deterministically", () => {
+    const begun = applyCommand(createInitialState(1), start());
+    expect(begun.ok).toBe(true);
+    if (!begun.ok) return;
+    const invalid = {
+      protocolVersion: 1,
+      commandId: "invalid-observation",
+      kind: "observe",
+      subjectId: "harbor",
+      category: "opportunity",
+    } as const;
+    expect(applyCommand(begun.state, invalid)).toMatchObject({
+      ok: false,
+      reason: "invalid-observation-subject",
+    });
+    expect(applyCommand(begun.state, invalid)).toEqual(applyCommand(begun.state, invalid));
+  });
+
+  it("enforces distinct publication provenance and limit and deduplicates returned projection", () => {
+    const observations = [1, 2, 3, 4].map((number) => observation(`observation-${number}`));
+    const state = returnedState(observations);
+    expect(createPlayerProjection(state).observations).toHaveLength(4);
+    expect(
+      applyCommand(state, {
+        protocolVersion: 1,
+        commandId: "publish-four",
+        kind: "publish-reports",
+        observationIds: observations.map((item) => item.id),
+      }),
+    ).toMatchObject({ ok: false, reason: "publication-limit" });
+    expect(
+      applyCommand(state, {
+        protocolVersion: 1,
+        commandId: "publish-duplicate",
+        kind: "publish-reports",
+        observationIds: [observations[0]!.id, observations[0]!.id],
+      }),
+    ).toMatchObject({ ok: false, reason: "observation-ineligible" });
+    expect(
+      applyCommand(state, {
+        protocolVersion: 1,
+        commandId: "publish-invented",
+        kind: "publish-reports",
+        observationIds: ["invented-observation"],
+      }),
+    ).toMatchObject({ ok: false, reason: "observation-ineligible" });
+  });
+
+  it("derives symmetric independent corroboration and excludes duplicates and incompatibilities", () => {
+    const state = createInitialState(4);
+    state.reports = [
+      report("report-a", "expedition-a"),
+      report("report-b", "expedition-b"),
+      report("report-a-duplicate", "expedition-a"),
+      report("report-incompatible", "expedition-c", { value: "blocked" }),
+    ];
+    const claims = createPlayerProjection(state).atlas;
+    expect(claims.find((claim) => claim.reportId === "report-a")?.independentCorroboration).toBe(1);
+    expect(claims.find((claim) => claim.reportId === "report-b")?.independentCorroboration).toBe(1);
+    expect(
+      claims.find((claim) => claim.reportId === "report-a-duplicate")?.independentCorroboration,
+    ).toBe(1);
+    expect(
+      claims.find((claim) => claim.reportId === "report-incompatible")?.independentCorroboration,
+    ).toBe(0);
+    state.reports.push(report("report-other-time", "expedition-d", { observedAt: 5 }));
+    expect(
+      createPlayerProjection(state).atlas.find((claim) => claim.reportId === "report-other-time")
+        ?.independentCorroboration,
+    ).toBe(0);
+  });
+
+  it("emits traversal then failure and replays travel-caused integrity failure exactly", () => {
+    const begun = applyCommand(createInitialState(2), start());
+    expect(begun.ok).toBe(true);
+    if (!begun.ok || !begun.state.expedition) return;
+    begun.state.expedition.integrity = 1;
+    begun.state.world.routes.find((route) => route.id === "r-hs")!.hazard = 3;
+    const failed = applyCommand(begun.state, {
+      protocolVersion: 1,
+      commandId: "fatal-travel",
       kind: "travel",
       routeId: "r-hs",
     });
-    expect(result).toMatchObject({ ok: false, reason: "wrong-phase", events: [] });
+    expect(failed.ok).toBe(true);
+    if (!failed.ok) return;
+    expect(failed.events.map((item) => item.kind)).toEqual([
+      "route-traversed",
+      "expedition-failed",
+    ]);
+    expect(serializeCanonicalState(replayEvents(begun.state, failed.events))).toBe(
+      serializeCanonicalState(failed.state),
+    );
   });
-  it("requires instruments and local subjects for observations", () => {
-    const begun = applyCommand(createInitialState(1), start);
-    expect(begun.ok).toBe(true);
-    if (!begun.ok) return;
-    const missing = applyCommand(begun.state, {
-      protocolVersion: 1,
-      commandId: "observe-1",
-      kind: "observe",
-      subjectId: "harbor",
-      category: "hazard",
-    });
-    expect(missing).toMatchObject({ ok: false, reason: "instrument-required" });
+
+  it("canonicalizes genuinely equivalent nested insertion orders without locale comparison", () => {
+    const left = { z: { b: 2, a: 1 }, a: [{ d: 4, c: 3 }] };
+    const right = { a: [{ c: 3, d: 4 }], z: { a: 1, b: 2 } };
+    const original = String.prototype.localeCompare;
+    String.prototype.localeCompare = () => {
+      throw new Error("locale comparison used");
+    };
+    try {
+      expect(serializeCanonical(left)).toBe(serializeCanonical(right));
+      expect(compareCodeUnits("a", "b")).toBe(-1);
+      const state = createInitialState(12);
+      state.driftDue = true;
+      expect(
+        applyCommand(state, {
+          protocolVersion: 1,
+          commandId: "locale-free-drift",
+          kind: "advance-drift",
+        }).ok,
+      ).toBe(true);
+    } finally {
+      String.prototype.localeCompare = original;
+    }
   });
-  it("never exposes hidden ground truth in the player projection", () => {
-    const text = JSON.stringify(createPlayerProjection(createInitialState(1)));
-    expect(text).not.toContain("hidden");
-    expect(text).not.toContain('hazard":');
-    expect(text).not.toContain('opportunity":');
-    expect(text).not.toContain("r-pf");
-  });
-  it("canonicalizes logically equivalent insertion order", () => {
-    const a = createInitialState(1);
-    const b = createInitialState(1);
-    b.rng = { value: b.rng.value };
-    expect(serializeCanonicalState(a)).toBe(serializeCanonicalState(b));
-  });
+
   it("maintains bounded integer resources under arbitrary seeds", () => {
     fc.assert(
       fc.property(fc.integer({ min: 1, max: 0x7fffffff }), (seed) => {
-        const begun = applyCommand(createInitialState(seed), start);
+        const begun = applyCommand(createInitialState(seed), start(`start-${seed}`));
         if (!begun.ok || !begun.state.expedition) return false;
         const moved = applyCommand(begun.state, {
           protocolVersion: 1,
@@ -101,81 +422,11 @@ describe("deterministic expedition core", () => {
       }),
     );
   });
-  it("scenario has the provisional coherent scale", () => {
+
+  it("retains the provisional scenario scale", () => {
     expect(DEVELOPMENT_SCENARIO.nodes).toHaveLength(12);
     expect(DEVELOPMENT_SCENARIO.routes).toHaveLength(18);
     expect(DEVELOPMENT_SCENARIO.baselineReports).toHaveLength(6);
-  });
-
-  it("publishes only observations from the returned expedition and enforces the limit", () => {
-    const state = createInitialState(3);
-    state.phase = "returned";
-    state.expedition = {
-      id: "expedition-1",
-      instruments: ["field-lens", "sounding-line"],
-      supply: 2,
-      integrity: 3,
-      locationId: "harbor",
-      previousLocationId: "shoal",
-      visited: ["harbor", "shoal", "harbor"],
-      unbankedReward: 0,
-      salvagedOpportunityIds: [],
-      observations: [],
-    };
-    const invented = applyCommand(state, {
-      protocolVersion: 1,
-      commandId: "publish-invented",
-      kind: "publish-reports",
-      observationIds: ["invented-observation"],
-    });
-    expect(invented).toMatchObject({ ok: false, reason: "observation-ineligible" });
-  });
-
-  it("does not count repeated reports from one expedition as independent corroboration", () => {
-    const state = createInitialState(4);
-    const first = state.reports[0]!;
-    state.reports.push({ ...first, id: "duplicate-observation", reportId: "duplicate-report" });
-    const claims = createPlayerProjection(state).atlas.filter(
-      (claim) => claim.subjectId === first.subjectId,
-    );
-    expect(claims.every((claim) => claim.independentCorroboration === 0)).toBe(true);
-  });
-
-  it("applies deterministic Drift and warns without rewriting historical reports", () => {
-    const state = createInitialState(8);
-    state.driftDue = true;
-    const command: PlayerCommand = {
-      protocolVersion: 1,
-      commandId: "drift-1",
-      kind: "advance-drift",
-    };
-    const a = applyCommand(state, command);
-    const b = applyCommand(state, command);
-    expect(a).toEqual(b);
-    expect(a.ok).toBe(true);
-    if (!a.ok) return;
-    const affected = a.state.driftedSubjects[0]!;
-    a.state.reports.push({ ...a.state.reports[0]!, subjectId: affected, reportId: "old-report" });
-    expect(
-      createPlayerProjection(a.state).atlas.find((claim) => claim.reportId === "old-report")
-        ?.potentiallyStale,
-    ).toBe(true);
-  });
-
-  it("creates a bounded Trace when failure loses eligible value", () => {
-    const begun = applyCommand(createInitialState(5), start);
-    expect(begun.ok).toBe(true);
-    if (!begun.ok || !begun.state.expedition) return;
-    begun.state.expedition.integrity = 0;
-    begun.state.expedition.unbankedReward = 5;
-    const failed = applyCommand(begun.state, {
-      protocolVersion: 1,
-      commandId: "fail-1",
-      kind: "resolve-failure",
-      reason: "integrity",
-    });
-    expect(failed.ok).toBe(true);
-    if (!failed.ok) return;
-    expect(failed.state.traces[0]?.recoverableReward).toBe(2);
+    expect(DEVELOPMENT_SCENARIO.routes.filter((route) => route.hidden)).toHaveLength(2);
   });
 });

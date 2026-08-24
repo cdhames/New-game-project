@@ -10,9 +10,14 @@ import {
   type PlayerSafeProjection,
   type RejectionReason,
   type ReportRecord,
+  type SafeRouteDescriptor,
   type StableId,
   type TraceRecord,
 } from "@long-map/protocol";
+
+export const ROUTE_VALUE_MIN = 0;
+export const ROUTE_VALUE_MAX = 3;
+export const INITIAL_LOGICAL_TIME = 6;
 
 export interface RouteTruth {
   id: StableId;
@@ -28,8 +33,14 @@ export interface NodeTruth {
   opportunity: number;
   category: ObservationCategory;
 }
+export interface WorldTruth {
+  nodes: NodeTruth[];
+  routes: RouteTruth[];
+  subjectLastChangedRevision: Record<StableId, number>;
+}
 export interface Scenario {
   version: "1.0.0";
+  initialLogicalTime: number;
   waystationId: StableId;
   nodes: NodeTruth[];
   routes: RouteTruth[];
@@ -56,6 +67,7 @@ export interface CanonicalState {
   revision: number;
   logicalTime: number;
   rng: RngState;
+  world: WorldTruth;
   phase: "idle" | "expedition" | "returned" | "failed";
   expeditionSequence: number;
   resolvedExpeditions: number;
@@ -65,7 +77,6 @@ export interface CanonicalState {
   personalObservations: ObservationRecord[];
   traces: TraceRecord[];
   bankedReward: number;
-  driftedSubjects: StableId[];
   processedCommandIds: StableId[];
 }
 export interface ApplySuccess {
@@ -80,6 +91,10 @@ export interface ApplyRejection {
   events: [];
 }
 export type ApplyResult = ApplySuccess | ApplyRejection;
+
+export function compareCodeUnits(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
 
 const nodes: NodeTruth[] = [
   ["harbor", 0, 0, "condition"],
@@ -128,39 +143,56 @@ const routes: RouteTruth[] = [
   edge("r-fo", "far-sound", "outer-light", 1, 2),
   edge("r-ol", "outer-light", "last-cairn", 2, 3, true),
 ];
+const methodFor: Record<ObservationCategory, Instrument> = {
+  route: "sounding-line",
+  hazard: "weather-glass",
+  condition: "weather-glass",
+  opportunity: "field-lens",
+};
+const baselineValue = (subjectId: StableId, category: ObservationCategory): string | number => {
+  const route = routes.find((item) => item.id === subjectId);
+  const node = nodes.find((item) => item.id === subjectId);
+  if (category === "route") return "passable";
+  if (category === "hazard") return route?.hazard ?? node?.opportunity ?? 0;
+  if (category === "condition") return route?.condition ?? node?.depth ?? 0;
+  return node?.opportunity ?? 0;
+};
 const baseline = (
   n: number,
   subjectId: StableId,
   category: ObservationCategory,
   quality: EvidenceQuality,
   age: number,
-): ReportRecord => ({
-  id: `baseline-observation-${n}`,
-  reportId: `baseline-report-${n}`,
-  subjectId,
-  category,
-  value: category === "route" ? "passable" : n,
-  observedRevision: 0,
-  observedAt: age,
-  expeditionId: `baseline-expedition-${n}`,
-  method: n % 2 === 0 ? "sounding-line" : "weather-glass",
-  quality,
-  sourceClass: "baseline",
-  publishedAt: age + 1,
-  corroboratingExpeditionIds: [],
-});
+): ReportRecord => {
+  const observedAt = INITIAL_LOGICAL_TIME - age;
+  return {
+    id: `baseline-observation-${n}`,
+    reportId: `baseline-report-${n}`,
+    subjectId,
+    category,
+    value: baselineValue(subjectId, category),
+    observedRevision: 0,
+    observedAt,
+    expeditionId: `baseline-expedition-${n}`,
+    method: methodFor[category],
+    quality,
+    sourceClass: "baseline",
+    publishedAt: Math.min(INITIAL_LOGICAL_TIME, observedAt + 1),
+  };
+};
 export const DEVELOPMENT_SCENARIO: Scenario = {
   version: "1.0.0",
+  initialLogicalTime: INITIAL_LOGICAL_TIME,
   waystationId: "harbor",
   nodes,
   routes,
   baselineReports: [
-    baseline(1, "r-hs", "route", "high", 0),
-    baseline(2, "r-hg", "route", "medium", 1),
-    baseline(3, "r-sn", "hazard", "low", 0),
+    baseline(1, "r-hs", "route", "high", 6),
+    baseline(2, "r-pf", "route", "medium", 4),
+    baseline(3, "r-sn", "hazard", "low", 3),
     baseline(4, "r-gp", "condition", "medium", 2),
     baseline(5, "shoal", "opportunity", "low", 1),
-    baseline(6, "glass-cay", "condition", "high", 2),
+    baseline(6, "glass-cay", "condition", "high", 0),
   ],
 };
 
@@ -176,8 +208,13 @@ export function createInitialState(seed: number, scenario = DEVELOPMENT_SCENARIO
     protocolVersion: PROTOCOL_VERSION,
     scenarioVersion: scenario.version,
     revision: 0,
-    logicalTime: 0,
+    logicalTime: scenario.initialLogicalTime,
     rng: { value: seed >>> 0 || 1 },
+    world: {
+      nodes: structuredClone(scenario.nodes),
+      routes: structuredClone(scenario.routes),
+      subjectLastChangedRevision: {},
+    },
     phase: "idle",
     expeditionSequence: 0,
     resolvedExpeditions: 0,
@@ -187,23 +224,13 @@ export function createInitialState(seed: number, scenario = DEVELOPMENT_SCENARIO
     personalObservations: [],
     traces: [],
     bankedReward: 0,
-    driftedSubjects: [],
     processedCommandIds: [],
   };
 }
-const instrumentFor: Record<ObservationCategory, Instrument> = {
-  route: "sounding-line",
-  hazard: "weather-glass",
-  condition: "weather-glass",
-  opportunity: "field-lens",
-};
-const routeAt = (scenario: Scenario, location: StableId, id: StableId): RouteTruth | undefined =>
-  scenario.routes.find((r) => r.id === id && (r.a === location || r.b === location));
+const routeAt = (world: WorldTruth, location: StableId, id: StableId): RouteTruth | undefined =>
+  world.routes.find((route) => route.id === id && (route.a === location || route.b === location));
 const otherEnd = (route: RouteTruth, location: StableId): StableId =>
   route.a === location ? route.b : route.a;
-const localSubject = (scenario: Scenario, location: StableId, subjectId: StableId): boolean =>
-  subjectId === location ||
-  scenario.routes.some((r) => r.id === subjectId && (r.a === location || r.b === location));
 const event = (kind: string, time: number, payload: Record<string, unknown>): DomainEvent => ({
   protocolVersion: PROTOCOL_VERSION,
   kind,
@@ -220,7 +247,43 @@ const snapshotEvent = (
   state: CanonicalState,
   kind: string,
   payload: Record<string, unknown>,
-): DomainEvent => event(kind, state.logicalTime, { ...payload, canonicalState: state });
+): DomainEvent =>
+  event(kind, state.logicalTime, { ...payload, canonicalState: structuredClone(state) });
+
+function knownRouteIds(state: CanonicalState): Set<StableId> {
+  const known = new Set<StableId>(
+    state.world.routes.filter((route) => !route.hidden).map((route) => route.id),
+  );
+  for (const evidence of [
+    ...state.reports,
+    ...state.personalObservations,
+    ...(state.expedition?.observations ?? []),
+  ])
+    if (evidence.category === "route") known.add(evidence.subjectId);
+  return known;
+}
+function observationApplicability(
+  state: CanonicalState,
+  location: StableId,
+  subjectId: StableId,
+  category: ObservationCategory,
+): "valid" | "not-local" | "invalid" {
+  const route = state.world.routes.find((item) => item.id === subjectId);
+  if (route) {
+    if (!knownRouteIds(state).has(route.id) || (route.a !== location && route.b !== location))
+      return "not-local";
+    return category === "route" || category === "hazard" || category === "condition"
+      ? "valid"
+      : "invalid";
+  }
+  const node = state.world.nodes.find((item) => item.id === subjectId);
+  if (!node || node.id !== location) return "not-local";
+  if (category === "opportunity")
+    return node.category === "opportunity" && node.opportunity > 0 ? "valid" : "invalid";
+  if (category === "hazard" || category === "condition")
+    return node.category === category ? "valid" : "invalid";
+  return "invalid";
+}
 
 export function applyCommand(
   state: CanonicalState,
@@ -232,17 +295,15 @@ export function applyCommand(
   const next = structuredClone(state);
   next.logicalTime += 1;
   next.processedCommandIds.push(command.commandId);
-  let kind: string;
-  let payload: Record<string, unknown>;
   if (command.kind === "start-expedition") {
-    if (state.phase !== "idle" && state.phase !== "returned" && state.phase !== "failed")
-      return reject(state, "wrong-phase");
+    if (state.phase !== "idle" && state.phase !== "failed") return reject(state, "wrong-phase");
+    if (state.driftDue) return reject(state, "drift-required");
     if (new Set(command.instruments).size !== 2) return reject(state, "invalid-loadout");
     next.expeditionSequence += 1;
     next.phase = "expedition";
     next.expedition = {
       id: `expedition-${next.expeditionSequence}`,
-      instruments: [...command.instruments].sort(),
+      instruments: [...command.instruments].sort(compareCodeUnits),
       supply: 6,
       integrity: 3,
       locationId: scenario.waystationId,
@@ -252,178 +313,251 @@ export function applyCommand(
       unbankedReward: 0,
       salvagedOpportunityIds: [],
     };
-    kind = "expedition-started";
-    payload = { expeditionId: next.expedition.id, instruments: next.expedition.instruments };
-  } else if (command.kind === "travel") {
-    const ex = state.expedition;
-    if (state.phase !== "expedition" || !ex) return reject(state, "wrong-phase");
-    const route = routeAt(scenario, ex.locationId, command.routeId);
-    if (!route) return reject(state, "route-not-connected");
-    if (ex.supply < 1) return reject(state, "insufficient-supply");
+    return {
+      ok: true,
+      state: next,
+      events: [
+        snapshotEvent(next, "expedition-started", {
+          expeditionId: next.expedition.id,
+          instruments: next.expedition.instruments,
+        }),
+      ],
+    };
+  }
+  if (command.kind === "travel") {
+    const expedition = state.expedition;
+    if (state.phase !== "expedition" || !expedition) return reject(state, "wrong-phase");
+    const route = routeAt(state.world, expedition.locationId, command.routeId);
+    if (!route || !knownRouteIds(state).has(command.routeId))
+      return reject(state, "route-unavailable");
+    if (expedition.supply < 1) return reject(state, "insufficient-supply");
     const roll = nextRandom(next.rng);
     next.rng = roll.rng;
     const damaged = roll.value % 6 < route.hazard;
-    const target = otherEnd(route, ex.locationId);
+    const target = otherEnd(route, expedition.locationId);
     const mutable = next.expedition!;
     mutable.supply -= 1;
     mutable.previousLocationId = mutable.locationId;
     mutable.locationId = target;
     mutable.visited.push(target);
     if (damaged) mutable.integrity -= 1;
-    kind = "route-traversed";
-    payload = { routeId: route.id, target, damaged };
-    if (mutable.integrity <= 0) fail(next, scenario, "integrity");
-  } else if (command.kind === "observe") {
-    const ex = state.expedition;
-    if (state.phase !== "expedition" || !ex) return reject(state, "wrong-phase");
-    if (ex.supply < 1) return reject(state, "insufficient-supply");
-    if (!ex.instruments.includes(instrumentFor[command.category]))
+    const traversal = snapshotEvent(next, "route-traversed", {
+      routeId: route.id,
+      target,
+      damaged,
+    });
+    if (mutable.integrity > 0) return { ok: true, state: next, events: [traversal] };
+    fail(next, scenario, "integrity");
+    return {
+      ok: true,
+      state: next,
+      events: [
+        traversal,
+        snapshotEvent(next, "expedition-failed", {
+          reason: "integrity",
+          traceId: next.traces.at(-1)?.id,
+        }),
+      ],
+    };
+  }
+  if (command.kind === "observe") {
+    const expedition = state.expedition;
+    if (state.phase !== "expedition" || !expedition) return reject(state, "wrong-phase");
+    const applicability = observationApplicability(
+      state,
+      expedition.locationId,
+      command.subjectId,
+      command.category,
+    );
+    if (applicability === "not-local") return reject(state, "subject-not-local");
+    if (applicability === "invalid") return reject(state, "invalid-observation-subject");
+    if (!expedition.instruments.includes(methodFor[command.category]))
       return reject(state, "instrument-required");
-    if (!localSubject(scenario, ex.locationId, command.subjectId))
-      return reject(state, "subject-not-local");
-    const obs: ObservationRecord = {
-      id: `observation-${ex.id}-${ex.observations.length + 1}`,
+    if (expedition.supply < 1) return reject(state, "insufficient-supply");
+    const observation: ObservationRecord = {
+      id: `observation-${expedition.id}-${expedition.observations.length + 1}`,
       subjectId: command.subjectId,
       category: command.category,
-      value: observedValue(scenario, command.subjectId, command.category),
+      value: observedValue(state.world, command.subjectId, command.category),
       observedRevision: state.revision,
       observedAt: next.logicalTime,
-      expeditionId: ex.id,
-      method: instrumentFor[command.category],
+      expeditionId: expedition.id,
+      method: methodFor[command.category],
       quality: "high",
     };
     next.expedition!.supply -= 1;
-    next.expedition!.observations.push(obs);
-    kind = "observation-made";
-    payload = { observation: obs };
-  } else if (command.kind === "salvage") {
-    const ex = state.expedition;
-    if (state.phase !== "expedition" || !ex) return reject(state, "wrong-phase");
-    const node = scenario.nodes.find((n) => n.id === ex.locationId);
+    next.expedition!.observations.push(observation);
+    return {
+      ok: true,
+      state: next,
+      events: [snapshotEvent(next, "observation-made", { observation })],
+    };
+  }
+  if (command.kind === "salvage") {
+    const expedition = state.expedition;
+    if (state.phase !== "expedition" || !expedition) return reject(state, "wrong-phase");
+    const node = state.world.nodes.find((item) => item.id === expedition.locationId);
     if (
       !node ||
       node.id !== command.opportunityId ||
+      node.category !== "opportunity" ||
       node.opportunity <= 0 ||
-      ex.salvagedOpportunityIds.includes(node.id)
+      expedition.salvagedOpportunityIds.includes(node.id)
     )
       return reject(state, "opportunity-unavailable");
-    if (ex.supply < 1) return reject(state, "insufficient-supply");
+    if (expedition.supply < 1) return reject(state, "insufficient-supply");
     next.expedition!.supply -= 1;
     next.expedition!.unbankedReward += node.opportunity;
     next.expedition!.salvagedOpportunityIds.push(node.id);
-    kind = "opportunity-salvaged";
-    payload = { opportunityId: node.id, reward: node.opportunity };
-  } else if (command.kind === "resolve-return") {
-    const ex = state.expedition;
-    if (state.phase !== "expedition" || !ex) return reject(state, "wrong-phase");
-    if (ex.locationId !== scenario.waystationId) return reject(state, "not-at-waystation");
+    return {
+      ok: true,
+      state: next,
+      events: [
+        snapshotEvent(next, "opportunity-salvaged", {
+          opportunityId: node.id,
+          reward: node.opportunity,
+        }),
+      ],
+    };
+  }
+  if (command.kind === "resolve-return") {
+    const expedition = state.expedition;
+    if (state.phase !== "expedition" || !expedition) return reject(state, "wrong-phase");
+    if (expedition.locationId !== scenario.waystationId) return reject(state, "not-at-waystation");
     next.phase = "returned";
-    next.bankedReward += ex.unbankedReward;
-    next.personalObservations.push(...ex.observations);
+    next.bankedReward += expedition.unbankedReward;
+    next.personalObservations.push(...expedition.observations);
     next.resolvedExpeditions += 1;
-    next.driftDue = next.resolvedExpeditions % 3 === 0;
-    kind = "expedition-returned";
-    payload = { bankedReward: ex.unbankedReward, observationIds: ex.observations.map((o) => o.id) };
-  } else if (command.kind === "resolve-failure") {
+    next.driftDue = next.driftDue || next.resolvedExpeditions % 3 === 0;
+    return {
+      ok: true,
+      state: next,
+      events: [
+        snapshotEvent(next, "expedition-returned", {
+          bankedReward: expedition.unbankedReward,
+          observationIds: expedition.observations.map((item) => item.id),
+        }),
+      ],
+    };
+  }
+  if (command.kind === "resolve-failure") {
     if (state.phase !== "expedition" || !state.expedition) return reject(state, "wrong-phase");
     if (command.reason === "integrity" && state.expedition.integrity > 0)
       return reject(state, "failure-not-eligible");
-    if (command.reason === "stranded" && canContinueOrReturn(state, scenario))
+    if (command.reason === "stranded" && canContinueOrReturn(state))
       return reject(state, "failure-not-eligible");
     fail(next, scenario, command.reason);
-    kind = "expedition-failed";
-    payload = { reason: command.reason, traceId: next.traces.at(-1)?.id };
-  } else if (command.kind === "publish-reports") {
+    return {
+      ok: true,
+      state: next,
+      events: [
+        snapshotEvent(next, "expedition-failed", {
+          reason: command.reason,
+          traceId: next.traces.at(-1)?.id,
+        }),
+      ],
+    };
+  }
+  if (command.kind === "publish-reports") {
     if (state.phase !== "returned" || !state.expedition) return reject(state, "wrong-phase");
-    if (command.observationIds.length > 3) return reject(state, "publication-limit");
-    const eligible = state.expedition.observations.filter((o) =>
-      command.observationIds.includes(o.id),
-    );
-    if (eligible.length !== new Set(command.observationIds).size)
+    const distinctIds = new Set(command.observationIds);
+    if (command.observationIds.length > 3 || distinctIds.size > 3)
+      return reject(state, "publication-limit");
+    if (distinctIds.size !== command.observationIds.length)
       return reject(state, "observation-ineligible");
-    const reports = eligible.map((o): ReportRecord => ({
-      ...o,
-      reportId: `report-${o.id}`,
+    const byId = new Map(state.expedition.observations.map((item) => [item.id, item]));
+    const eligible = command.observationIds.map((id) => byId.get(id));
+    if (eligible.some((item) => !item)) return reject(state, "observation-ineligible");
+    const reports = eligible.map((item): ReportRecord => ({
+      ...item!,
+      reportId: `report-${item!.id}`,
       sourceClass: "player",
       publishedAt: next.logicalTime,
-      corroboratingExpeditionIds: independentCorroborators(next.reports, o),
     }));
     next.reports.push(...reports);
     next.expedition = null;
     next.phase = "idle";
-    kind = "reports-published";
-    payload = { reportIds: reports.map((r) => r.reportId) };
-  } else {
-    if (!state.driftDue || state.phase === "expedition") return reject(state, "drift-not-due");
-    const choices = [...scenario.routes].sort((a, b) => a.id.localeCompare(b.id));
-    const roll = nextRandom(next.rng);
-    next.rng = roll.rng;
-    const count = (roll.value % 2) + 1;
-    const selected: StableId[] = [];
-    for (let i = 0; i < count; i += 1)
-      selected.push(choices[(roll.value + i * 7) % choices.length]!.id);
-    next.revision += 1;
-    next.driftedSubjects = [...new Set([...next.driftedSubjects, ...selected])].sort();
-    next.driftDue = false;
-    kind = "drift-applied";
-    payload = { revision: next.revision, subjectCount: selected.length };
+    return {
+      ok: true,
+      state: next,
+      events: [
+        snapshotEvent(next, "reports-published", {
+          reportIds: reports.map((item) => item.reportId),
+        }),
+      ],
+    };
   }
-  return { ok: true, state: next, events: [snapshotEvent(next, kind, payload)] };
+  if (!state.driftDue || state.phase === "expedition" || state.phase === "returned")
+    return reject(state, "drift-not-due");
+  const choices = [...state.world.routes].sort((a, b) => compareCodeUnits(a.id, b.id));
+  const countRoll = nextRandom(next.rng);
+  next.rng = countRoll.rng;
+  const count = (countRoll.value % 2) + 1;
+  const selected: RouteTruth[] = [];
+  while (selected.length < count) {
+    const selectionRoll = nextRandom(next.rng);
+    next.rng = selectionRoll.rng;
+    const candidate = choices[selectionRoll.value % choices.length]!;
+    if (!selected.some((item) => item.id === candidate.id)) selected.push(candidate);
+  }
+  next.revision += 1;
+  const changes = selected
+    .sort((a, b) => compareCodeUnits(a.id, b.id))
+    .map((selectedRoute, index) => {
+      const route = next.world.routes.find((item) => item.id === selectedRoute.id)!;
+      const property = (countRoll.value + index) % 2 === 0 ? "condition" : "hazard";
+      const before = route[property];
+      route[property] = before >= ROUTE_VALUE_MAX ? ROUTE_VALUE_MIN : before + 1;
+      next.world.subjectLastChangedRevision[route.id] = next.revision;
+      return { subjectId: route.id, property, before, after: route[property] };
+    });
+  next.driftDue = false;
+  return {
+    ok: true,
+    state: next,
+    events: [snapshotEvent(next, "drift-applied", { revision: next.revision, changes })],
+  };
 }
 
 function observedValue(
-  scenario: Scenario,
+  world: WorldTruth,
   subjectId: StableId,
   category: ObservationCategory,
 ): string | number {
-  const route = scenario.routes.find((r) => r.id === subjectId);
-  const node = scenario.nodes.find((n) => n.id === subjectId);
-  if (category === "route") return route ? "passable" : "local";
-  if (category === "hazard")
-    return route?.hazard ?? (node?.category === "hazard" ? node.opportunity : 0);
-  if (category === "condition") return route?.condition ?? node?.depth ?? 0;
-  return node?.opportunity ?? 0;
+  const route = world.routes.find((item) => item.id === subjectId);
+  const node = world.nodes.find((item) => item.id === subjectId);
+  if (category === "route") return "passable";
+  if (category === "hazard") return route?.hazard ?? node!.opportunity;
+  if (category === "condition") return route?.condition ?? node!.depth;
+  return node!.opportunity;
 }
-function independentCorroborators(
-  reports: ReportRecord[],
-  observation: ObservationRecord,
-): StableId[] {
-  return [
-    ...new Set(
-      reports
-        .filter(
-          (r) =>
-            r.subjectId === observation.subjectId &&
-            r.category === observation.category &&
-            r.value === observation.value &&
-            r.expeditionId !== observation.expeditionId,
-        )
-        .map((r) => r.expeditionId),
-    ),
-  ].sort();
-}
-function canContinueOrReturn(state: CanonicalState, scenario: Scenario): boolean {
-  const ex = state.expedition;
-  if (!ex || ex.integrity <= 0 || ex.supply <= 0) return false;
-  return scenario.routes.some((r) => r.a === ex.locationId || r.b === ex.locationId);
+function canContinueOrReturn(state: CanonicalState): boolean {
+  const expedition = state.expedition;
+  if (!expedition || expedition.integrity <= 0 || expedition.supply <= 0) return false;
+  const known = knownRouteIds(state);
+  return state.world.routes.some(
+    (route) =>
+      known.has(route.id) &&
+      (route.a === expedition.locationId || route.b === expedition.locationId),
+  );
 }
 function fail(state: CanonicalState, scenario: Scenario, reason: "stranded" | "integrity"): void {
-  const ex = state.expedition!;
-  const recoverableReward = Math.floor(ex.unbankedReward / 2);
-  const observationIds = ex.observations.slice(0, 2).map((o) => o.id);
+  const expedition = state.expedition!;
+  const recoverableReward = Math.floor(expedition.unbankedReward / 2);
+  const observationIds = expedition.observations.slice(0, 2).map((item) => item.id);
   if (recoverableReward > 0 || observationIds.length > 0)
     state.traces.push({
-      id: `trace-${ex.id}`,
-      expeditionId: ex.id,
-      associationId: ex.locationId || scenario.waystationId,
+      id: `trace-${expedition.id}`,
+      expeditionId: expedition.id,
+      associationId: expedition.locationId || scenario.waystationId,
       recoverableReward,
       observationIds,
     });
   state.phase = "failed";
   state.resolvedExpeditions += 1;
-  state.driftDue = state.resolvedExpeditions % 3 === 0;
-  ex.integrity = reason === "integrity" ? 0 : ex.integrity;
-  ex.unbankedReward = 0;
+  state.driftDue = state.driftDue || state.resolvedExpeditions % 3 === 0;
+  expedition.integrity = reason === "integrity" ? 0 : expedition.integrity;
+  expedition.unbankedReward = 0;
 }
 export function evolveFromEvent(_state: CanonicalState, domainEvent: DomainEvent): CanonicalState {
   const snapshot = domainEvent.payload["canonicalState"];
@@ -438,53 +572,76 @@ function canonicalize(value: unknown): unknown {
   if (value && typeof value === "object")
     return Object.fromEntries(
       Object.entries(value)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([k, v]) => [k, canonicalize(v)]),
+        .sort(([a], [b]) => compareCodeUnits(a, b))
+        .map(([key, nested]) => [key, canonicalize(nested)]),
     );
   return value;
 }
+export function serializeCanonical(value: unknown): string {
+  return JSON.stringify(canonicalize(value));
+}
 export function serializeCanonicalState(state: CanonicalState): string {
-  return JSON.stringify(canonicalize(state));
+  return serializeCanonical(state);
 }
 export function checksum(text: string): string {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i += 1) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 16777619);
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
   }
-  return (h >>> 0).toString(16).padStart(8, "0");
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+function compatibleReports(report: ReportRecord, reports: ReportRecord[]): ReportRecord[] {
+  return reports.filter(
+    (candidate) =>
+      candidate.reportId !== report.reportId &&
+      candidate.expeditionId !== report.expeditionId &&
+      candidate.subjectId === report.subjectId &&
+      candidate.category === report.category &&
+      candidate.value === report.value &&
+      candidate.observedRevision === report.observedRevision &&
+      candidate.observedAt === report.observedAt,
+  );
 }
 export function createPlayerProjection(
   state: CanonicalState,
   scenario = DEVELOPMENT_SCENARIO,
 ): PlayerSafeProjection {
-  const ex = state.expedition;
-  const location = ex?.locationId ?? scenario.waystationId;
-  const atlas: AtlasClaim[] = state.reports.map((r) => ({
-    ...r,
-    age: state.logicalTime - r.observedAt,
+  const expedition = state.expedition;
+  const location = expedition?.locationId ?? scenario.waystationId;
+  const known = knownRouteIds(state);
+  const visibleRoutes: SafeRouteDescriptor[] = state.world.routes
+    .filter((route) => known.has(route.id) && (route.a === location || route.b === location))
+    .map((route) => ({ id: route.id, a: route.a, b: route.b }))
+    .sort((a, b) => compareCodeUnits(a.id, b.id));
+  const observations = new Map<StableId, ObservationRecord>();
+  for (const item of [...state.personalObservations, ...(expedition?.observations ?? [])])
+    observations.set(item.id, item);
+  const atlas: AtlasClaim[] = state.reports.map((report) => ({
+    ...report,
+    age: state.logicalTime - report.observedAt,
     potentiallyStale:
-      state.driftedSubjects.includes(r.subjectId) && r.observedRevision < state.revision,
-    independentCorroboration: new Set([r.expeditionId, ...r.corroboratingExpeditionIds]).size - 1,
+      (state.world.subjectLastChangedRevision[report.subjectId] ?? 0) > report.observedRevision,
+    independentCorroboration: new Set(
+      compatibleReports(report, state.reports).map((item) => item.expeditionId),
+    ).size,
   }));
   return {
     protocolVersion: PROTOCOL_VERSION,
     scenarioVersion: state.scenarioVersion,
     revision: state.revision,
     logicalTime: state.logicalTime,
+    driftDue: state.driftDue,
     phase: state.phase,
     locationId: location,
-    supply: ex?.supply ?? 0,
-    integrity: ex?.integrity ?? 0,
-    selectedInstruments: ex?.instruments ?? [],
-    visibleRouteIds: scenario.routes
-      .filter((r) => !r.hidden && (r.a === location || r.b === location))
-      .map((r) => r.id)
-      .sort(),
-    observations: [...state.personalObservations, ...(ex?.observations ?? [])],
+    supply: expedition?.supply ?? 0,
+    integrity: expedition?.integrity ?? 0,
+    selectedInstruments: expedition?.instruments ?? [],
+    visibleRoutes,
+    observations: [...observations.values()],
     atlas,
     traces: structuredClone(state.traces),
     bankedReward: state.bankedReward,
-    unbankedReward: ex?.unbankedReward ?? 0,
+    unbankedReward: expedition?.unbankedReward ?? 0,
   };
 }

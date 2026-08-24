@@ -1,6 +1,7 @@
 import {
   applyCommand,
   checksum,
+  compareCodeUnits,
   createInitialState,
   createPlayerProjection,
   DEVELOPMENT_SCENARIO,
@@ -53,6 +54,7 @@ const command = (
 const depth = new Map(DEVELOPMENT_SCENARIO.nodes.map((n) => [n.id, n.depth]));
 
 export function legalCommands(view: PlayerSafeProjection, sequence: number): PlayerCommand[] {
+  if (view.driftDue && view.phase !== "returned") return [command("advance-drift", sequence)];
   if (view.phase === "idle" || view.phase === "failed")
     return [
       command("start-expedition", sequence, { instruments: ["sounding-line", "field-lens"] }),
@@ -65,7 +67,7 @@ export function legalCommands(view: PlayerSafeProjection, sequence: number): Pla
     ];
   const result: PlayerCommand[] =
     view.supply > 0
-      ? view.visibleRouteIds.map((routeId) => command("travel", sequence, { routeId }))
+      ? view.visibleRoutes.map((route) => command("travel", sequence, { routeId: route.id }))
       : [];
   if (view.supply > 0) {
     if (view.selectedInstruments.includes("field-lens"))
@@ -103,9 +105,9 @@ function choose(
       : undefined;
   if (policy === "cautious" && retreat) return retreat;
   if (policy === "aggressive" && travels.length > 0)
-    return travels.slice().sort((a, b) => b.routeId.localeCompare(a.routeId))[0]!;
+    return travels.slice().sort((a, b) => compareCodeUnits(b.routeId, a.routeId))[0]!;
   if (policy === "cautious" && travels.length > 0)
-    return travels.slice().sort((a, b) => a.routeId.localeCompare(b.routeId))[0]!;
+    return travels.slice().sort((a, b) => compareCodeUnits(a.routeId, b.routeId))[0]!;
   return legal[random % legal.length]!;
 }
 export function runExpedition(policy: PolicyName, seed: number): RunMetrics {
