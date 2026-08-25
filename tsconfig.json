@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/protocol" },
     { "path": "packages/game-core" },
-    { "path": "packages/sim" }
+    { "path": "packages/sim" },
+    { "path": "apps/web" }
   ]
 }

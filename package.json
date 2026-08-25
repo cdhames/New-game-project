@@ -13,6 +13,10 @@
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "build": "tsc -b",
+    "dev:web": "pnpm --filter @long-map/web dev",
+    "build:web": "pnpm --filter @long-map/web build",
+    "test:web": "pnpm --filter @long-map/web test",
+    "preview:web": "pnpm --filter @long-map/web preview",
     "sim:smoke": "pnpm --filter @long-map/sim smoke",
     "validate": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm sim:smoke"
   },

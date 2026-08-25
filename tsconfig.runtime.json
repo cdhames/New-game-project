@@ -5,7 +5,8 @@
     "paths": {
       "@long-map/protocol": ["packages/protocol/src/index.ts"],
       "@long-map/game-core": ["packages/game-core/src/index.ts"],
-      "@long-map/sim": ["packages/sim/src/index.ts"]
+      "@long-map/sim": ["packages/sim/src/index.ts"],
+      "@long-map/web": ["apps/web/src/index.ts"]
     },
     "composite": false,
     "declaration": false,
