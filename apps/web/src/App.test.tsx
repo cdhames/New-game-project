@@ -184,6 +184,50 @@ describe("player-facing browser prototype", () => {
     expect(storage.getItem("unrelated")).toBe("preserve-me");
   });
 
+  it("normal reset immediately installs a fresh visible authority and view", async () => {
+    const storage = new MemoryStorage();
+    storage.setItem("unrelated", "preserve-me");
+    const authority = authorityFor(storage);
+    startAndTravel(authority);
+    authority.dispatch({ kind: "observe", subjectId: "r-hs", category: "route" });
+    const user = userEvent.setup();
+    render(<App storage={storage} confirmReset={() => true} />);
+    expect(screen.getByRole("heading", { name: "At Whisper Shoal" })).toBeInTheDocument();
+    expect(screen.getByText("A new Observation was recorded in the Logbook.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Reset local prototype…" }));
+
+    expect(screen.getByRole("heading", { name: "Prepare a local Expedition" })).toBeInTheDocument();
+    expect(screen.getByText(/Current:/).parentElement).toHaveTextContent("Lantern Harbor");
+    expect(screen.getAllByRole("article")).toHaveLength(6);
+    expect(screen.getByText("No personal Observations yet.", { exact: false })).toBeInTheDocument();
+    expect(
+      screen.getByText("The first accepted command will begin this local history."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Visible Traces" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /Sounding Line/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Weather Glass/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Field Lens/ })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Start Expedition" })).toBeEnabled();
+    await user.click(screen.getByText("Developer details"));
+    expect(screen.getByText("Accepted local commands: 0")).toBeInTheDocument();
+    expect(storage.getItem(LOCAL_RECORD_KEY)).toBeNull();
+    expect(storage.getItem("unrelated")).toBe("preserve-me");
+  });
+
+  it("canceling normal reset preserves the active game and stored history", async () => {
+    const storage = new MemoryStorage();
+    startAndTravel(authorityFor(storage));
+    const storedBefore = storage.getItem(LOCAL_RECORD_KEY);
+    const user = userEvent.setup();
+    render(<App storage={storage} confirmReset={() => false} />);
+
+    await user.click(screen.getByRole("button", { name: "Reset local prototype…" }));
+
+    expect(screen.getByRole("heading", { name: "At Whisper Shoal" })).toBeInTheDocument();
+    expect(storage.getItem(LOCAL_RECORD_KEY)).toBe(storedBefore);
+  });
+
   it("gives every actionable control an accessible name and never renders raw snapshots", () => {
     const storage = new MemoryStorage();
     startAndTravel(authorityFor(storage));

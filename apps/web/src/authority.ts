@@ -153,6 +153,22 @@ const safeSummary = (domainEvent: DomainEvent, sequence: number): SafeEventSumma
 
 const commandOutcome = (event: DomainEvent): string => safeSummary(event, 0).message;
 
+const LOCAL_COMMAND_ID_PATTERN = /^local-command-([1-9]\d*)$/;
+
+const deriveCommandSequence = (commands: PlayerCommand[]): number => {
+  let maximum = 0;
+  for (const [index, command] of commands.entries()) {
+    const match = LOCAL_COMMAND_ID_PATTERN.exec(command.commandId);
+    const sequence = match ? Number(match[1]) : Number.NaN;
+    if (!Number.isSafeInteger(sequence) || sequence <= 0)
+      throw new Error(
+        `Saved command ${index + 1} does not use a compatible browser-local command ID.`,
+      );
+    maximum = Math.max(maximum, sequence);
+  }
+  return maximum;
+};
+
 export class LocalAuthority {
   readonly seed: number;
   private state: CanonicalState;
@@ -166,12 +182,13 @@ export class LocalAuthority {
     record: LocalRecord,
     state: CanonicalState,
     activity: SafeEventSummary[],
+    commandSequence: number,
   ) {
     this.seed = record.seed;
     this.commands = [...record.commands];
     this.state = state;
     this.activity = activity;
-    this.commandSequence = record.commands.length;
+    this.commandSequence = commandSequence;
     this.statusMessage = record.commands.length
       ? "Saved local expedition history restored."
       : "A fresh local Atlas is ready.";
@@ -194,6 +211,19 @@ export class LocalAuthority {
         } satisfies LocalRecord);
     if (record instanceof Error) return { ok: false, message: record.message };
 
+    let commandSequence: number;
+    try {
+      commandSequence = deriveCommandSequence(record.commands);
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "The saved local command IDs are incompatible with this prototype version.",
+      };
+    }
+
     let state = createInitialState(record.seed);
     const activity: SafeEventSummary[] = [];
     for (const [index, command] of record.commands.entries()) {
@@ -207,7 +237,10 @@ export class LocalAuthority {
       for (const domainEvent of result.events)
         activity.push(safeSummary(domainEvent, activity.length + 1));
     }
-    return { ok: true, authority: new LocalAuthority(storage, record, state, activity) };
+    return {
+      ok: true,
+      authority: new LocalAuthority(storage, record, state, activity, commandSequence),
+    };
   }
 
   view(): AuthorityView {
@@ -220,10 +253,10 @@ export class LocalAuthority {
   }
 
   dispatch(intent: CommandIntent): AuthorityView {
-    this.commandSequence += 1;
+    const candidateSequence = this.commandSequence + 1;
     const candidate: unknown = {
       protocolVersion: PROTOCOL_VERSION,
-      commandId: `local-command-${this.commandSequence}`,
+      commandId: `local-command-${candidateSequence}`,
       ...intent,
     };
     const parsed = PlayerCommandSchema.safeParse(candidate);
@@ -244,7 +277,14 @@ export class LocalAuthority {
       seed: this.seed,
       commands: nextCommands,
     };
-    this.storage.setItem(LOCAL_RECORD_KEY, JSON.stringify(nextRecord));
+    try {
+      this.storage.setItem(LOCAL_RECORD_KEY, JSON.stringify(nextRecord));
+    } catch {
+      this.statusMessage =
+        "The action was not saved or applied because local storage is unavailable. You can safely retry.";
+      return this.view();
+    }
+    this.commandSequence = candidateSequence;
     this.commands.push(parsed.data);
     this.state = result.state;
     for (const domainEvent of result.events)

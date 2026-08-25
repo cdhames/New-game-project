@@ -43,10 +43,22 @@ Load validates record shape and version, validates every command with `PlayerCom
 the initial state, and replays each command through `applyCommand`. A rejected replay produces a safe
 recovery screen without silently discarding history. Accepted commands receive monotonically
 increasing IDs derived from the validated history length and are persisted only after core
-acceptance. Domain events, canonical snapshots, and arbitrary React state are not persisted.
+acceptance. On load, the authority requires the browser-local `local-command-N` format and derives
+the next sequence from the greatest persisted `N`, so valid non-contiguous histories cannot reuse an
+accepted ID. Histories containing other StableId forms fail closed as incompatible rather than being
+rewritten. Schema-invalid, core-rejected, and unpersisted actions do not consume accepted sequence
+numbers.
+
+Dispatch is transactional at the browser boundary: it validates and applies against a candidate
+state, writes the complete next command record, and only then commits canonical state, activity, the
+accepted command list, and the sequence number in memory. A localStorage write failure leaves the
+authority aligned with persisted history and presents a safe retry message. Domain events, canonical
+snapshots, and arbitrary React state are not persisted.
 
 Reset requires confirmation, removes only this prototype key, and creates a fresh deterministic
-world. Unrelated localStorage values are untouched.
+world. The App increments an explicit authority generation and remounts the view-owning game shell,
+so a valid active session immediately displays the new fresh projection instead of retaining the
+previous shell's initialized view. Unrelated localStorage values are untouched.
 
 ## Default seed
 
@@ -102,7 +114,9 @@ legitimate baseline route revelation, exact loadout size, safe affordances, star
 salvage visibility, deterministic round trip, zero-supply return precedence, publication and its
 three-Report limit, publishing nothing, Drift gating/staleness, reload replay, corruption recovery,
 targeted reset, accessible names, keyboard activation, reduced-motion information, and absence of
-raw canonical/event snapshot content.
+raw canonical/event snapshot content. Reliability coverage also exercises normal and canceled reset
+from an active session, non-contiguous and rejection-safe command sequencing, reload uniqueness, and
+transactional behavior when localStorage writes fail.
 
 Existing protocol, core, property, replay, simulation, and smoke tests remain unchanged.
 

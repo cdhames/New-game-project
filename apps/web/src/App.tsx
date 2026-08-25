@@ -9,6 +9,7 @@ import type {
 import {
   createLocalAuthority,
   DEFAULT_DEVELOPMENT_SEED,
+  LOCAL_RECORD_KEY,
   type AuthorityLoadResult,
   type AuthorityView,
   type CommandIntent,
@@ -71,20 +72,23 @@ export function App({
   ]);
   const [selectedReports, setSelectedReports] = useState<StableId[]>([]);
   const [processing, setProcessing] = useState(false);
+  const [authorityGeneration, setAuthorityGeneration] = useState(0);
 
   const reset = (): void => {
     if (!confirmReset("Clear only The Long Map local prototype history and create a fresh world?"))
       return;
-    storage.removeItem("the-long-map.local-prototype.v1");
+    storage.removeItem(LOCAL_RECORD_KEY);
     setSelectedReports([]);
     setSelectedInstruments(["sounding-line", "weather-glass"]);
     setLoadResult(createLocalAuthority(storage));
+    setAuthorityGeneration((generation) => generation + 1);
   };
 
   if (!loadResult.ok) return <RecoveryScreen message={loadResult.message} recover={reset} />;
 
   return (
     <GameShell
+      key={authorityGeneration}
       authority={loadResult.authority}
       selectedInstruments={selectedInstruments}
       setSelectedInstruments={setSelectedInstruments}

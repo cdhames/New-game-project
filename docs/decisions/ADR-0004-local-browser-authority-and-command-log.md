@@ -22,6 +22,18 @@ On load, validate every stored command with `PlayerCommandSchema` and reconstruc
 commands from the initial seed. Persist only after command acceptance. Do not store React state,
 canonical snapshots, or raw Domain events.
 
+Browser-local command IDs use `local-command-N`. Loading derives the committed sequence from the
+greatest valid persisted `N`, not command count; gaps remain valid and are not rewritten. A stored
+command using another otherwise valid StableId form is treated as an incompatible local record with
+a recovery message. Schema-invalid, core-rejected, and failed-to-persist attempts do not consume an
+accepted sequence number.
+
+Command application is transactional at this boundary: validate and calculate candidate core state,
+persist the next complete record, then commit in-memory canonical state, accepted history, activity,
+and sequence. Storage failure leaves the prior authority state intact. Confirmed reset removes only
+the prototype record and installs a new authority generation so the React view-owning shell remounts
+with a fresh projection immediately.
+
 ## Rationale
 
 The safe projection boundary prevents ordinary presentation code from becoming an accidental oracle
@@ -47,9 +59,9 @@ because it requires no infrastructure while preserving the conceptual host/UI sp
 
 Positive consequences are one rule implementation, deterministic reload, small persisted records,
 safe UI contracts, targeted reset, and an authority interface that can later move behind a server.
-Costs include replay time growing with command history, explicit record/version compatibility,
-sanitization discipline, and the fact that local browser owners can inspect or alter their own
-process and storage.
+Costs include replay time growing with command history, explicit record/version and browser-local ID
+compatibility, no durability guarantee beyond the browser's localStorage behavior, sanitization
+discipline, and the fact that local browser owners can inspect or alter their own process and storage.
 
 The in-process authority is therefore **not** secure server authority and is unsuitable for
 competitive, shared, persistent online production. It provides architecture discipline, not a trust

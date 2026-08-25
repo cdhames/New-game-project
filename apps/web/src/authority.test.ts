@@ -9,16 +9,28 @@ import {
 
 class MemoryStorage implements StoragePort {
   readonly values = new Map<string, string>();
+  failNextWrite = false;
   getItem(key: string): string | null {
     return this.values.get(key) ?? null;
   }
   setItem(key: string, value: string): void {
+    if (this.failNextWrite) {
+      this.failNextWrite = false;
+      throw new Error("simulated storage failure");
+    }
     this.values.set(key, value);
   }
   removeItem(key: string): void {
     this.values.delete(key);
   }
 }
+
+const commandIds = (storage: MemoryStorage): string[] => {
+  const record = JSON.parse(storage.getItem(LOCAL_RECORD_KEY)!) as {
+    commands: Array<{ commandId: string }>;
+  };
+  return record.commands.map((command) => command.commandId);
+};
 
 const load = (storage: MemoryStorage) => {
   const result = createLocalAuthority(storage);
@@ -114,5 +126,121 @@ describe("local browser authority", () => {
     expect(after.driftDue).toBe(false);
     expect(after.actions.canStartExpedition).toBe(true);
     expect(after.atlas.some((claim) => claim.potentiallyStale)).toBe(true);
+  });
+
+  it("does not consume an accepted sequence number when the core rejects a command", () => {
+    const storage = new MemoryStorage();
+    const authority = load(storage);
+    authority.dispatch({ kind: "travel", routeId: "r-hs" });
+    expect(authority.view().acceptedCommandCount).toBe(0);
+    authority.dispatch({
+      kind: "start-expedition",
+      instruments: ["sounding-line", "weather-glass"],
+    });
+    expect(commandIds(storage)).toEqual(["local-command-1"]);
+  });
+
+  it("does not consume an accepted sequence number when command schema validation fails", () => {
+    const storage = new MemoryStorage();
+    const authority = load(storage);
+    authority.dispatch({ kind: "start-expedition", instruments: ["sounding-line"] });
+    expect(authority.view().acceptedCommandCount).toBe(0);
+    authority.dispatch({
+      kind: "start-expedition",
+      instruments: ["sounding-line", "weather-glass"],
+    });
+    expect(commandIds(storage)).toEqual(["local-command-1"]);
+  });
+
+  it("keeps IDs unique and increasing after rejection, reload, and acceptance", () => {
+    const storage = new MemoryStorage();
+    const authority = load(storage);
+    authority.dispatch({
+      kind: "start-expedition",
+      instruments: ["sounding-line", "weather-glass"],
+    });
+    authority.dispatch({ kind: "observe", subjectId: "r-hs", category: "route" });
+
+    const reloaded = load(storage);
+    reloaded.dispatch({ kind: "travel", routeId: "r-hs" });
+    const ids = commandIds(storage);
+    const sequences = ids.map((id) => Number(id.replace("local-command-", "")));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(sequences.at(-1)).toBeGreaterThan(Math.max(...sequences.slice(0, -1)));
+    expect(load(storage).view().projection.locationId).toBe("shoal");
+  });
+
+  it("derives the next sequence from the maximum valid non-contiguous ID", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      LOCAL_RECORD_KEY,
+      JSON.stringify({
+        version: LOCAL_RECORD_VERSION,
+        seed: DEFAULT_DEVELOPMENT_SEED,
+        commands: [
+          {
+            protocolVersion: 1,
+            commandId: "local-command-1",
+            kind: "start-expedition",
+            instruments: ["sounding-line", "weather-glass"],
+          },
+          {
+            protocolVersion: 1,
+            commandId: "local-command-4",
+            kind: "travel",
+            routeId: "r-hs",
+          },
+        ],
+      }),
+    );
+    const authority = load(storage);
+    authority.dispatch({ kind: "travel", routeId: "r-hs" });
+    expect(commandIds(storage)).toEqual(["local-command-1", "local-command-4", "local-command-5"]);
+  });
+
+  it("rejects otherwise valid histories with incompatible browser-local IDs", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      LOCAL_RECORD_KEY,
+      JSON.stringify({
+        version: LOCAL_RECORD_VERSION,
+        seed: DEFAULT_DEVELOPMENT_SEED,
+        commands: [
+          {
+            protocolVersion: 1,
+            commandId: "imported-command",
+            kind: "start-expedition",
+            instruments: ["sounding-line", "weather-glass"],
+          },
+        ],
+      }),
+    );
+    const result = createLocalAuthority(storage);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("compatible browser-local command ID");
+  });
+
+  it("keeps authority state transactional when storage persistence fails", () => {
+    const storage = new MemoryStorage();
+    const authority = load(storage);
+    const before = authority.view();
+    storage.failNextWrite = true;
+    const failed = authority.dispatch({
+      kind: "start-expedition",
+      instruments: ["sounding-line", "weather-glass"],
+    });
+
+    expect(JSON.stringify(failed.projection)).toBe(JSON.stringify(before.projection));
+    expect(failed.acceptedCommandCount).toBe(before.acceptedCommandCount);
+    expect(failed.activity).toEqual(before.activity);
+    expect(failed.statusMessage).toContain("not saved or applied");
+    expect(storage.getItem(LOCAL_RECORD_KEY)).toBeNull();
+
+    const retried = authority.dispatch({
+      kind: "start-expedition",
+      instruments: ["sounding-line", "weather-glass"],
+    });
+    expect(retried.projection.phase).toBe("expedition");
+    expect(commandIds(storage)).toEqual(["local-command-1"]);
   });
 });
