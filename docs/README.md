@@ -20,6 +20,8 @@ These documents define the current project baseline. More specific decision reco
 - [Roadmap](roadmap/ROADMAP.md) — phased outputs and evidence gates without calendar promises.
 - [Phase 1 Core Foundation](implementation/PHASE1_CORE_FOUNDATION.md) — implemented package
   boundaries, deterministic rules, replay, simulation, validation, and limitations.
+- [Phase 1 Browser Prototype](implementation/PHASE1_BROWSER_PROTOTYPE.md) — local player-facing loop,
+  safe rendering boundary, command-log persistence, accessibility, testing, and limitations.
 
 ## Decision records
 
@@ -27,6 +29,8 @@ These documents define the current project baseline. More specific decision reco
 - [ADR-0002: Deterministic game core](decisions/ADR-0002-deterministic-game-core.md) — isolation of rules for replay, simulation, and server authority.
 - [ADR-0003: Phase 1 toolchain and workspace](decisions/ADR-0003-phase1-toolchain-and-workspace.md) —
   implemented TypeScript workspace, validation, and dependency choices.
+- [ADR-0004: Local browser authority and command log](decisions/ADR-0004-local-browser-authority-and-command-log.md) —
+  in-process prototype authority, safe projections, replay persistence, and replacement criteria.
 
 ## Decision labels
 

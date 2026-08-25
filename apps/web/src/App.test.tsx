@@ -1,0 +1,208 @@
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it } from "vitest";
+import { App } from "./App";
+import {
+  createLocalAuthority,
+  LOCAL_RECORD_KEY,
+  type LocalAuthority,
+  type StoragePort,
+} from "./authority";
+
+class MemoryStorage implements StoragePort {
+  readonly values = new Map<string, string>();
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null;
+  }
+  setItem(key: string, value: string): void {
+    this.values.set(key, value);
+  }
+  removeItem(key: string): void {
+    this.values.delete(key);
+  }
+}
+
+const authorityFor = (storage: MemoryStorage): LocalAuthority => {
+  const result = createLocalAuthority(storage);
+  if (!result.ok) throw new Error(result.message);
+  return result.authority;
+};
+
+const startAndTravel = (authority: LocalAuthority): void => {
+  authority.dispatch({
+    kind: "start-expedition",
+    instruments: ["sounding-line", "weather-glass"],
+  });
+  authority.dispatch({ kind: "travel", routeId: "r-hs" });
+};
+
+const finishLoop = (storage: MemoryStorage, observations = 0): void => {
+  const authority = authorityFor(storage);
+  startAndTravel(authority);
+  for (let index = 0; index < observations; index += 1)
+    authority.dispatch({ kind: "observe", subjectId: "r-hs", category: "route" });
+  authority.dispatch({ kind: "travel", routeId: "r-hs" });
+  authority.dispatch({ kind: "resolve-return" });
+  authority.dispatch({ kind: "publish-reports", observationIds: [] });
+};
+
+describe("player-facing browser prototype", () => {
+  it("renders the title, six Reports, three instruments, safe map, and legitimately known hidden route", () => {
+    const storage = new MemoryStorage();
+    render(<App storage={storage} />);
+    expect(screen.getByRole("heading", { name: "The Long Map", level: 1 })).toBeInTheDocument();
+    expect(screen.getByText("A world no one can see alone")).toBeInTheDocument();
+    expect(screen.getAllByRole("article")).toHaveLength(6);
+    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    expect(screen.getAllByText("Pale Inlet ↔ Far Sound").length).toBeGreaterThan(0);
+    expect(document.body).not.toHaveTextContent("Last Cairn");
+    expect(document.body).not.toHaveTextContent("r-ol");
+  });
+
+  it("requires exactly two selected instruments and starts by keyboard interaction", async () => {
+    const user = userEvent.setup();
+    render(<App storage={new MemoryStorage()} />);
+    const start = screen.getByRole("button", { name: "Start Expedition" });
+    expect(start).toBeEnabled();
+    const line = screen.getByRole("checkbox", { name: /Sounding Line/ });
+    await user.click(line);
+    expect(start).toBeDisabled();
+    expect(screen.getByText("Select exactly two instruments to depart.")).toBeInTheDocument();
+    await user.click(line);
+    start.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("heading", { name: "At Lantern Harbor" })).toBeInTheDocument();
+  });
+
+  it("generates Observation and salvage controls only from legal player-safe affordances", async () => {
+    const user = userEvent.setup();
+    render(<App storage={new MemoryStorage()} />);
+    await user.click(screen.getByRole("button", { name: "Start Expedition" }));
+    expect(
+      screen.getByText("No legal Observation is available with this loadout and supply."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Salvage opportunity/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Travel toward Whisper Shoal" }));
+    expect(screen.getAllByRole("button", { name: /Observe/ }).length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("button", { name: "Salvage opportunity at Whisper Shoal" }),
+    ).toBeInTheDocument();
+  });
+
+  it("plays a complete round trip through the interface and displays a zero-supply legal return", async () => {
+    const user = userEvent.setup();
+    render(<App storage={new MemoryStorage()} />);
+    await user.click(screen.getByRole("button", { name: "Start Expedition" }));
+    await user.click(screen.getByRole("button", { name: "Travel toward Whisper Shoal" }));
+    const observe = screen.getByRole("button", {
+      name: "Observe Route at Lantern Harbor ↔ Whisper Shoal",
+    });
+    await user.click(observe);
+    await user.click(observe);
+    await user.click(observe);
+    await user.click(observe);
+    await user.click(screen.getByRole("button", { name: "Travel toward Lantern Harbor" }));
+    expect(screen.getByLabelText("Expedition resources")).toHaveTextContent("0 Supply");
+    expect(screen.getByRole("button", { name: "Resolve safe return" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /failure/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Resolve safe return" }));
+    expect(
+      screen.getByRole("heading", { name: "Choose Reports for the Atlas" }),
+    ).toBeInTheDocument();
+  });
+
+  it("publishes selected returned Observations, changes the Atlas, and limits selection to three", async () => {
+    const storage = new MemoryStorage();
+    const authority = authorityFor(storage);
+    startAndTravel(authority);
+    for (let index = 0; index < 4; index += 1)
+      authority.dispatch({ kind: "observe", subjectId: "r-hs", category: "route" });
+    authority.dispatch({ kind: "travel", routeId: "r-hs" });
+    authority.dispatch({ kind: "resolve-return" });
+    const user = userEvent.setup();
+    render(<App storage={storage} />);
+    const publication = screen.getByRole("heading", {
+      name: "Choose Reports for the Atlas",
+    }).parentElement!;
+    const boxes = within(publication).getAllByRole("checkbox");
+    await user.click(boxes[0]!);
+    await user.click(boxes[1]!);
+    await user.click(boxes[2]!);
+    expect(boxes[3]).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Publish selected Reports" }));
+    expect(screen.getAllByRole("article")).toHaveLength(9);
+    expect(screen.getAllByText(/Published to Atlas/)).toHaveLength(3);
+  });
+
+  it("keeps Publish nothing legal", async () => {
+    const storage = new MemoryStorage();
+    const authority = authorityFor(storage);
+    startAndTravel(authority);
+    authority.dispatch({ kind: "travel", routeId: "r-hs" });
+    authority.dispatch({ kind: "resolve-return" });
+    const user = userEvent.setup();
+    render(<App storage={storage} />);
+    await user.click(screen.getByRole("button", { name: "Publish nothing" }));
+    expect(screen.getByRole("button", { name: "Start Expedition" })).toBeInTheDocument();
+  });
+
+  it("shows Drift-required state, blocks starting, and renders stale warnings after advance", async () => {
+    const storage = new MemoryStorage();
+    finishLoop(storage);
+    finishLoop(storage);
+    finishLoop(storage);
+    const user = userEvent.setup();
+    render(<App storage={storage} />);
+    expect(screen.queryByRole("button", { name: "Start Expedition" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Advance Drift" }));
+    expect(screen.getByRole("button", { name: "Start Expedition" })).toBeInTheDocument();
+    expect(screen.getAllByText("⚠ Potentially stale after Drift").length).toBeGreaterThan(0);
+  });
+
+  it("survives simulated reload and reconstructs the same location", () => {
+    const storage = new MemoryStorage();
+    startAndTravel(authorityFor(storage));
+    const first = render(<App storage={storage} />);
+    expect(screen.getByRole("heading", { name: "At Whisper Shoal" })).toBeInTheDocument();
+    first.unmount();
+    render(<App storage={storage} />);
+    expect(screen.getByRole("heading", { name: "At Whisper Shoal" })).toBeInTheDocument();
+  });
+
+  it("offers safe recovery for corrupt data and reset clears only the prototype record", async () => {
+    const storage = new MemoryStorage();
+    storage.setItem("unrelated", "preserve-me");
+    storage.setItem(LOCAL_RECORD_KEY, "corrupt");
+    const user = userEvent.setup();
+    render(<App storage={storage} confirmReset={() => true} />);
+    expect(
+      screen.getByRole("heading", { name: "The saved voyage cannot be loaded safely" }),
+    ).toBeInTheDocument();
+    expect(storage.getItem(LOCAL_RECORD_KEY)).toBe("corrupt");
+    await user.click(screen.getByRole("button", { name: "Reset local prototype" }));
+    expect(screen.getByRole("button", { name: "Start Expedition" })).toBeInTheDocument();
+    expect(storage.getItem("unrelated")).toBe("preserve-me");
+  });
+
+  it("gives every actionable control an accessible name and never renders raw snapshots", () => {
+    const storage = new MemoryStorage();
+    startAndTravel(authorityFor(storage));
+    render(<App storage={storage} />);
+    for (const control of screen.getAllByRole("button")) expect(control).toHaveAccessibleName();
+    for (const control of screen.queryAllByRole("checkbox")) expect(control).toHaveAccessibleName();
+    const rendered = document.body.textContent ?? "";
+    expect(rendered).not.toContain("canonicalState");
+    expect(rendered).not.toContain("subjectLastChangedRevision");
+    expect(rendered).not.toContain("processedCommandIds");
+    expect(rendered).not.toContain("r-ol");
+  });
+
+  it("keeps reduced-motion CSS informationally equivalent", () => {
+    render(<App storage={new MemoryStorage()} />);
+    expect(screen.getByLabelText("Map legend")).toHaveTextContent("Current location");
+    expect(screen.getByLabelText("Map legend")).toHaveTextContent("Visited");
+    expect(
+      screen.getAllByText("No later known Drift warning", { exact: false }).length,
+    ).toBeGreaterThan(0);
+  });
+});

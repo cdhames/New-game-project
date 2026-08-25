@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import type {
   AtlasClaim,
   Instrument,
@@ -34,8 +34,10 @@ interface AppProps {
   confirmReset?: (message: string) => boolean;
 }
 
-const routeById = (projection: PlayerSafeProjection, id: StableId): SafeRouteDescriptor | undefined =>
-  projection.knownRoutes.find((route) => route.id === id);
+const routeById = (
+  projection: PlayerSafeProjection,
+  id: StableId,
+): SafeRouteDescriptor | undefined => projection.knownRoutes.find((route) => route.id === id);
 
 function RecoveryScreen({
   message,
@@ -114,14 +116,19 @@ interface GameShellProps {
 
 function GameShell(props: GameShellProps): React.JSX.Element {
   const [view, setView] = useState<AuthorityView>(() => props.authority.view());
+  const processingRef = useRef(false);
   const projection = view.projection;
   const dispatch = (intent: CommandIntent): void => {
-    if (props.processing) return;
+    if (props.processing || processingRef.current) return;
+    processingRef.current = true;
     props.setProcessing(true);
     const next = props.authority.dispatch(intent);
     setView(next);
     if (intent.kind === "publish-reports") props.setSelectedReports([]);
-    props.setProcessing(false);
+    queueMicrotask(() => {
+      processingRef.current = false;
+      props.setProcessing(false);
+    });
   };
 
   return (
@@ -155,7 +162,11 @@ function GameShell(props: GameShellProps): React.JSX.Element {
           <KnownTopology projection={projection} dispatch={dispatch} disabled={props.processing} />
         </section>
 
-        <section id="expedition-controls" className="control-panel panel" aria-labelledby="control-title">
+        <section
+          id="expedition-controls"
+          className="control-panel panel"
+          aria-labelledby="control-title"
+        >
           <PhaseControls
             projection={projection}
             selectedInstruments={props.selectedInstruments}
@@ -168,14 +179,19 @@ function GameShell(props: GameShellProps): React.JSX.Element {
         </section>
 
         <AtlasPanel atlas={projection.atlas} logicalTime={projection.logicalTime} />
-        <Logbook observations={projection.observations} atlas={projection.atlas} />
+        <Logbook
+          observations={projection.observations}
+          atlas={projection.atlas}
+          traces={projection.traces}
+        />
         <ActivityPanel view={view} />
 
         <aside className="about-panel panel" aria-labelledby="about-title">
           <h2 id="about-title">About this local world</h2>
           <p>
-            This prototype replays a validated command log through the deterministic game core. It is
-            local-only and has no account, server, network world, or production security boundary.
+            This prototype replays a validated command log through the deterministic game core. It
+            is local-only and has no account, server, network world, or production security
+            boundary.
           </p>
           <details>
             <summary>Developer details</summary>
@@ -271,9 +287,15 @@ function AtlasMap({
         })}
       </svg>
       <div className="map-legend" aria-label="Map legend">
-        <span><i className="legend-mark current" /> Current location</span>
-        <span><i className="legend-mark visited" /> Visited</span>
-        <span><i className="legend-line" /> Known route</span>
+        <span>
+          <i className="legend-mark current" /> Current location
+        </span>
+        <span>
+          <i className="legend-mark visited" /> Visited
+        </span>
+        <span>
+          <i className="legend-line" /> Known route
+        </span>
         <span>✦ Waystation</span>
       </div>
     </div>
@@ -294,7 +316,9 @@ function KnownTopology({
       <h3>Known topology and routes</h3>
       <p>
         Current: <strong>{displayName(projection.locationId)}</strong>
-        {projection.previousLocationId ? ` · Previous: ${displayName(projection.previousLocationId)}` : ""}
+        {projection.previousLocationId
+          ? ` · Previous: ${displayName(projection.previousLocationId)}`
+          : ""}
       </p>
       <ul className="route-list">
         {projection.knownRoutes.map((route) => {
@@ -374,8 +398,8 @@ function SetupControls(props: PhaseControlProps): React.JSX.Element {
       </h2>
       {projection.phase === "failed" ? (
         <div className="failure-note" role="status">
-          <strong>Previous Expedition failed.</strong> Unbanked findings were lost; any visible Trace
-          remains listed in the Logbook area. Banked value remains {projection.bankedReward}.
+          <strong>Previous Expedition failed.</strong> Unbanked findings were lost; any visible
+          Trace remains listed in the Logbook area. Banked value remains {projection.bankedReward}.
         </div>
       ) : null}
       <fieldset className="instrument-fieldset">
@@ -424,14 +448,20 @@ function ExpeditionControls(props: PhaseControlProps): React.JSX.Element {
       <p className="eyebrow">Expedition underway</p>
       <h2 id="control-title">At {displayName(projection.locationId)}</h2>
       <div className="resource-row" aria-label="Expedition resources">
-        <span><strong>{projection.supply}</strong> Supply</span>
-        <span><strong>{projection.integrity}</strong> Integrity</span>
-        <span><strong>{projection.unbankedReward}</strong> Unbanked</span>
-        <span><strong>{projection.bankedReward}</strong> Banked</span>
+        <span>
+          <strong>{projection.supply}</strong> Supply
+        </span>
+        <span>
+          <strong>{projection.integrity}</strong> Integrity
+        </span>
+        <span>
+          <strong>{projection.unbankedReward}</strong> Unbanked
+        </span>
+        <span>
+          <strong>{projection.bankedReward}</strong> Banked
+        </span>
       </div>
-      <p>
-        Instruments: {projection.selectedInstruments.map(humanize).join(" · ")}
-      </p>
+      <p>Instruments: {projection.selectedInstruments.map(humanize).join(" · ")}</p>
       <ActionGroup title="Observe">
         {projection.actions.observations.length ? (
           projection.actions.observations.map((action) => (
@@ -491,7 +521,13 @@ function ExpeditionControls(props: PhaseControlProps): React.JSX.Element {
   );
 }
 
-function ActionGroup({ title, children }: { title: string; children: React.ReactNode }): React.JSX.Element {
+function ActionGroup({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
   return (
     <section className="action-group" aria-label={title}>
       <h3>{title}</h3>
@@ -557,18 +593,33 @@ function PublicationControls(props: PhaseControlProps): React.JSX.Element {
   );
 }
 
-function ObservationDescription({ observation }: { observation: ObservationRecord }): React.JSX.Element {
+function ObservationDescription({
+  observation,
+}: {
+  observation: ObservationRecord;
+}): React.JSX.Element {
   return (
     <span className="observation-description">
       <strong>{displayName(observation.subjectId)}</strong>
-      <span>{categoryName(observation.category)} · {readingLabel(observation.category, observation.value)}</span>
-      <span>{qualityLabel(observation.quality)} · observed at time {observation.observedAt}</span>
+      <span>
+        {categoryName(observation.category)} ·{" "}
+        {readingLabel(observation.category, observation.value)}
+      </span>
+      <span>
+        {qualityLabel(observation.quality)} · observed at time {observation.observedAt}
+      </span>
       <span>World revision {observation.observedRevision}</span>
     </span>
   );
 }
 
-function AtlasPanel({ atlas, logicalTime }: { atlas: AtlasClaim[]; logicalTime: number }): React.JSX.Element {
+function AtlasPanel({
+  atlas,
+  logicalTime,
+}: {
+  atlas: AtlasClaim[];
+  logicalTime: number;
+}): React.JSX.Element {
   const [filter, setFilter] = useState("all");
   const filtered = useMemo(
     () => atlas.filter((claim) => filter === "all" || claim.category === filter),
@@ -594,26 +645,48 @@ function AtlasPanel({ atlas, logicalTime }: { atlas: AtlasClaim[]; logicalTime: 
       </div>
       <p className="atlas-explainer">
         Reports are historical claims. Confidence is not certainty; corroboration counts compatible
-        evidence from independent Expeditions. Drift can mark older Reports potentially stale without
-        rewriting them.
+        evidence from independent Expeditions. Drift can mark older Reports potentially stale
+        without rewriting them.
       </p>
       <div className="claim-grid">
         {filtered.map((claim) => (
-          <article className={`claim-card ${claim.potentiallyStale ? "stale" : ""}`} key={claim.reportId}>
+          <article
+            className={`claim-card ${claim.potentiallyStale ? "stale" : ""}`}
+            key={claim.reportId}
+          >
             <div className="claim-title-row">
               <h3>{displayName(claim.subjectId)}</h3>
               <span className="category-chip">{categoryName(claim.category)}</span>
             </div>
             <p className="claim-reading">{readingLabel(claim.category, claim.value)}</p>
             <dl>
-              <div><dt>Age</dt><dd>{claim.age} steps (time {logicalTime})</dd></div>
-              <div><dt>Evidence</dt><dd>{qualityLabel(claim.quality)}</dd></div>
-              <div><dt>Source</dt><dd>{sourceLabel(claim.sourceClass)}</dd></div>
-              <div><dt>Corroboration</dt><dd>{claim.independentCorroboration} independent</dd></div>
-              <div><dt>Observed revision</dt><dd>{claim.observedRevision}</dd></div>
+              <div>
+                <dt>Age</dt>
+                <dd>
+                  {claim.age} steps (time {logicalTime})
+                </dd>
+              </div>
+              <div>
+                <dt>Evidence</dt>
+                <dd>{qualityLabel(claim.quality)}</dd>
+              </div>
+              <div>
+                <dt>Source</dt>
+                <dd>{sourceLabel(claim.sourceClass)}</dd>
+              </div>
+              <div>
+                <dt>Corroboration</dt>
+                <dd>{claim.independentCorroboration} independent</dd>
+              </div>
+              <div>
+                <dt>Observed revision</dt>
+                <dd>{claim.observedRevision}</dd>
+              </div>
             </dl>
             <p className={`stale-indicator ${claim.potentiallyStale ? "is-stale" : ""}`}>
-              {claim.potentiallyStale ? "⚠ Potentially stale after Drift" : "✓ No later known Drift warning"}
+              {claim.potentiallyStale
+                ? "⚠ Potentially stale after Drift"
+                : "✓ No later known Drift warning"}
             </p>
           </article>
         ))}
@@ -622,8 +695,18 @@ function AtlasPanel({ atlas, logicalTime }: { atlas: AtlasClaim[]; logicalTime: 
   );
 }
 
-function Logbook({ observations, atlas }: { observations: ObservationRecord[]; atlas: AtlasClaim[] }): React.JSX.Element {
-  const published = new Set(atlas.filter((claim) => claim.sourceClass === "player").map((claim) => claim.id));
+function Logbook({
+  observations,
+  atlas,
+  traces,
+}: {
+  observations: ObservationRecord[];
+  atlas: AtlasClaim[];
+  traces: PlayerSafeProjection["traces"];
+}): React.JSX.Element {
+  const published = new Set(
+    atlas.filter((claim) => claim.sourceClass === "player").map((claim) => claim.id),
+  );
   return (
     <section className="logbook-panel panel" aria-labelledby="logbook-title">
       <p className="eyebrow">Personal evidence</p>
@@ -634,7 +717,8 @@ function Logbook({ observations, atlas }: { observations: ObservationRecord[]; a
             <li key={observation.id}>
               <ObservationDescription observation={observation} />
               <span className="publication-state">
-                {published.has(observation.id) ? "Published to Atlas" : "Private Observation"} · {humanize(observation.expeditionId)}
+                {published.has(observation.id) ? "Published to Atlas" : "Private Observation"} ·{" "}
+                {humanize(observation.expeditionId)}
               </span>
             </li>
           ))}
@@ -642,6 +726,17 @@ function Logbook({ observations, atlas }: { observations: ObservationRecord[]; a
       ) : (
         <p>No personal Observations yet. Depart and use an instrument after your first crossing.</p>
       )}
+      {traces.length ? (
+        <div className="trace-list">
+          <h3>Visible Traces</h3>
+          {traces.map((trace) => (
+            <p key={trace.id}>
+              Trace at {displayName(trace.associationId)} · {trace.recoverableReward} recoverable
+              reward · {trace.observationIds.length} retained Observation references
+            </p>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }

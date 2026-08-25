@@ -69,8 +69,14 @@ export interface LoadSuccess {
 
 export type AuthorityLoadResult = LoadFailure | LoadSuccess;
 
-const isRecordShape = (value: unknown): value is { version: unknown; seed: unknown; commands: unknown } =>
-  typeof value === "object" && value !== null && "version" in value && "seed" in value && "commands" in value;
+const isRecordShape = (
+  value: unknown,
+): value is { version: unknown; seed: unknown; commands: unknown } =>
+  typeof value === "object" &&
+  value !== null &&
+  "version" in value &&
+  "seed" in value &&
+  "commands" in value;
 
 const validateRecord = (raw: string): LocalRecord => {
   let parsed: unknown;
@@ -113,15 +119,35 @@ const safeSummary = (domainEvent: DomainEvent, sequence: number): SafeEventSumma
   if (domainEvent.kind === "observation-made")
     return { ...base, message: "A new Observation was recorded in the Logbook.", tone: "positive" };
   if (domainEvent.kind === "opportunity-salvaged")
-    return { ...base, message: "An opportunity was salvaged for the return journey.", tone: "positive" };
+    return {
+      ...base,
+      message: "An opportunity was salvaged for the return journey.",
+      tone: "positive",
+    };
   if (domainEvent.kind === "expedition-returned")
-    return { ...base, message: "The Expedition returned safely. Publication is ready.", tone: "positive" };
+    return {
+      ...base,
+      message: "The Expedition returned safely. Publication is ready.",
+      tone: "positive",
+    };
   if (domainEvent.kind === "expedition-failed")
-    return { ...base, message: "The Expedition failed. A later journey may find its Trace.", tone: "warning" };
+    return {
+      ...base,
+      message: "The Expedition failed. A later journey may find its Trace.",
+      tone: "warning",
+    };
   if (domainEvent.kind === "reports-published")
-    return { ...base, message: "Publication completed and the Atlas was updated.", tone: "positive" };
+    return {
+      ...base,
+      message: "Publication completed and the Atlas was updated.",
+      tone: "positive",
+    };
   if (domainEvent.kind === "drift-applied")
-    return { ...base, message: "Drift moved through the region; historical Reports were preserved.", tone: "warning" };
+    return {
+      ...base,
+      message: "Drift moved through the region; historical Reports were preserved.",
+      tone: "warning",
+    };
   return { ...base, message: "The Expedition record advanced.", tone: "neutral" };
 };
 
@@ -161,7 +187,11 @@ export class LocalAuthority {
             return error instanceof Error ? error : new Error("The saved local record is invalid.");
           }
         })()
-      : ({ version: LOCAL_RECORD_VERSION, seed: DEFAULT_DEVELOPMENT_SEED, commands: [] } satisfies LocalRecord);
+      : ({
+          version: LOCAL_RECORD_VERSION,
+          seed: DEFAULT_DEVELOPMENT_SEED,
+          commands: [],
+        } satisfies LocalRecord);
     if (record instanceof Error) return { ok: false, message: record.message };
 
     let state = createInitialState(record.seed);
@@ -198,7 +228,8 @@ export class LocalAuthority {
     };
     const parsed = PlayerCommandSchema.safeParse(candidate);
     if (!parsed.success) {
-      this.statusMessage = "That action could not be formed safely. Your saved history is unchanged.";
+      this.statusMessage =
+        "That action could not be formed safely. Your saved history is unchanged.";
       return this.view();
     }
     const result = applyCommand(this.state, parsed.data);
@@ -229,5 +260,6 @@ export class LocalAuthority {
   }
 }
 
-export const createLocalAuthority = (storage: StoragePort = window.localStorage): AuthorityLoadResult =>
-  LocalAuthority.load(storage);
+export const createLocalAuthority = (
+  storage: StoragePort = window.localStorage,
+): AuthorityLoadResult => LocalAuthority.load(storage);

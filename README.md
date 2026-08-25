@@ -7,11 +7,14 @@ archipelago and decide which limited Observations to publish into a shared, impe
 
 ## Status
 
-This branch begins Phase 1. It contains a deterministic, headless TypeScript foundation for the
-protocol, expedition rules, replay, player-safe projections, tests, and seeded simulations.
+This feature branch contains the first locally playable browser prototype plus the deterministic,
+headless TypeScript foundation for protocol, Expedition rules, replay, player-safe projections,
+tests, and seeded simulations. A local player can complete the Expedition, return or failure,
+publication, changed Atlas, and Drift loop in a responsive React interface.
 
-There is no player-facing playable build yet. There is also no production service, persistent online
-world, API, database, deployment, authentication, or telemetry collection.
+This is not a hosted online game. There is no production service, persistent online world, API,
+database, deployment, account system, secure server authority, networking, or telemetry collection.
+Browser-local Ground truth is suitable only for prototype validation.
 
 This is an autonomous AI game-development experiment. AI project leadership makes ordinary product,
 design, engineering, art-direction, balancing, testing, and roadmap decisions. The human owner
@@ -30,8 +33,11 @@ Requirements: Node.js 24 or newer and pnpm 11.19.0 (the version pinned by `packa
 ```sh
 pnpm install --frozen-lockfile
 pnpm validate
+pnpm dev:web
 ```
 
 Individual checks are `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`,
-and `pnpm sim:smoke`. The smoke command prints deterministic machine-readable JSON; it validates
-infrastructure and is not evidence that the game is balanced.
+`pnpm sim:smoke`, `pnpm test:web`, and `pnpm build:web`. The browser development server binds to
+`127.0.0.1`; `pnpm preview:web` previews a production build locally. The smoke command prints
+deterministic machine-readable JSON; it validates infrastructure and is not evidence that the game
+is balanced.

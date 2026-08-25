@@ -37,6 +37,27 @@ export const NODE_COORDINATES: Readonly<Record<StableId, readonly [number, numbe
   "last-cairn": [815, 230],
 };
 
+const ROUTE_NAMES: Readonly<Record<StableId, string>> = {
+  "r-hs": "Lantern Harbor ↔ Whisper Shoal",
+  "r-hg": "Lantern Harbor ↔ Glass Cay",
+  "r-sn": "Whisper Shoal ↔ North Mark",
+  "r-sr": "Whisper Shoal ↔ Reed Bank",
+  "r-gn": "Glass Cay ↔ North Mark",
+  "r-gp": "Glass Cay ↔ Pale Inlet",
+  "r-nr": "North Mark ↔ Reed Bank",
+  "r-nd": "North Mark ↔ Deep Spur",
+  "r-rd": "Reed Bank ↔ Deep Spur",
+  "r-rr": "Reed Bank ↔ Rain Key",
+  "r-pr": "Pale Inlet ↔ Rain Key",
+  "r-pf": "Pale Inlet ↔ Far Sound",
+  "r-dn": "Deep Spur ↔ Needle Rock",
+  "r-rf": "Rain Key ↔ Far Sound",
+  "r-ro": "Rain Key ↔ Outer Light",
+  "r-fn": "Far Sound ↔ Needle Rock",
+  "r-fo": "Far Sound ↔ Outer Light",
+  "r-ol": "Outer Light ↔ Last Cairn",
+};
+
 export const INSTRUMENTS: ReadonlyArray<{
   id: Instrument;
   name: string;
@@ -59,7 +80,8 @@ export const INSTRUMENTS: ReadonlyArray<{
   },
 ];
 
-export const displayName = (id: StableId): string => NODE_NAMES[id] ?? humanize(id);
+export const displayName = (id: StableId): string =>
+  NODE_NAMES[id] ?? ROUTE_NAMES[id] ?? humanize(id);
 
 export const humanize = (value: string): string =>
   value
