@@ -4,7 +4,6 @@ import type {
   Instrument,
   ObservationRecord,
   PlayerSafeProjection,
-  SafeRouteDescriptor,
   StableId,
 } from "@long-map/protocol";
 import {
@@ -33,11 +32,6 @@ interface AppProps {
   storage?: StoragePort;
   confirmReset?: (message: string) => boolean;
 }
-
-const routeById = (
-  projection: PlayerSafeProjection,
-  id: StableId,
-): SafeRouteDescriptor | undefined => projection.knownRoutes.find((route) => route.id === id);
 
 function RecoveryScreen({
   message,
@@ -158,7 +152,7 @@ function GameShell(props: GameShellProps): React.JSX.Element {
             </div>
             <span className="revision-badge">World revision {projection.revision}</span>
           </div>
-          <AtlasMap projection={projection} dispatch={dispatch} disabled={props.processing} />
+          <AtlasMap projection={projection} />
           <KnownTopology projection={projection} dispatch={dispatch} disabled={props.processing} />
         </section>
 
@@ -210,15 +204,7 @@ function GameShell(props: GameShellProps): React.JSX.Element {
   );
 }
 
-function AtlasMap({
-  projection,
-  dispatch,
-  disabled,
-}: {
-  projection: PlayerSafeProjection;
-  dispatch: (intent: CommandIntent) => void;
-  disabled: boolean;
-}): React.JSX.Element {
+function AtlasMap({ projection }: { projection: PlayerSafeProjection }): React.JSX.Element {
   const knownNodes = new Set(projection.knownNodeIds);
   const traversable = new Set(projection.actions.traversableRouteIds);
   return (
