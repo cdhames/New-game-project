@@ -72,6 +72,61 @@ The seed is absent from the primary play surface and appears only under Develope
 
 ## Interface and visual system
 
+### Revision 0.2 Stage 1 shell
+
+The browser now uses a deliberate single-screen desktop shell at widths of 1100 CSS pixels and
+above. A compact status bar shows the implemented phase, location, Supply, current Integrity under
+the player-facing label **Vessel Integrity**, banked and unbanked reward, world revision, and
+Drift-due state. The label change does not alter the existing Integrity rule. The map receives the
+largest workspace column, the mission/action panel remains beside it in normal grid layout, and the
+Atlas, Logbook, and Activity occupy one tabbed secondary-information panel. About, developer details,
+and the unchanged targeted reset are in a compact utility bar.
+
+The presentation hierarchy is:
+
+- `App` owns authority loading, reset lifecycle, and local UI selections;
+- `GameShell` owns the current safe view and dispatch bridge;
+- `StatusBar` renders compact safe status;
+- `MapWorkspace` renders only known safe nodes and routes;
+- `MissionActionPanel` renders setup, Expedition, publication, Drift, and failure controls; and
+- `SecondaryInformationTabs` renders Atlas, Logbook, and sanitized Activity content.
+
+React continues to receive only `PlayerSafeProjection`, sanitized activity summaries, legal command
+dispatch, and local lifecycle controls. No deterministic decision moved into React.
+
+Desktop document scrolling is suppressed only at the supported desktop breakpoint. The application
+grid and each shrinkable child use bounded sizing and `min-height: 0`; long mission and secondary
+content scrolls inside its own panel. The mission panel is neither sticky nor fixed and cannot overlay
+the map or secondary information. Atlas, Logbook, and Activity use accessible `tablist`, `tab`, and
+`tabpanel` semantics with Atlas initially selected, roving focus, mouse/touch activation, and Left
+Arrow/Right Arrow selection.
+
+During an active Expedition the mission panel keeps Travel, Observe, Salvage, and Return in stable
+order. Unavailable categories remain present with a player-safe explanation. Legal Travel buttons are
+generated only from `actions.traversableRouteIds` and known safe route descriptors inside the mission
+panel. The full known-topology text alternative remains in the Atlas tab as secondary reference. The
+SVG description points to the equivalent mission-panel controls.
+
+Below the desktop breakpoint, normal document scrolling returns and the DOM/reading order is compact
+status, map, mission/actions, secondary tabs, then utilities. No CSS-only reordering contradicts that
+order. The action panel is not sticky, tabs remain internally bounded, and the page prevents
+horizontal overflow.
+
+Actual in-app browser checks on `127.0.0.1` at 100% zoom produced these measurements:
+
+| Phase / viewport | Document client / scroll size | Main panel bounds | Internal scrolling and overlap |
+| --- | --- | --- | --- |
+| Setup, 1366 × 768 | 1366 × 768 / 1366 × 768 | map 633 × 561; actions 314 × 561; tabs 371 × 561 | no panel overlap; Start Expedition reachable through the bounded action scroller |
+| Setup, 1440 × 900 | 1440 × 900 / 1440 × 900 | map 668 × 691; actions 332 × 691; tabs 392 × 691 | no panel overlap; Start Expedition visible without document scrolling |
+| Active, 1366 × 768 | 1366 × 768 / 1366 × 768 | map 633 × 561; actions 314 × 561; tabs 371 × 561 | action scroller 527 / 765 px; Atlas scroller 482 / 2193 px; no overlap |
+| Active, 1440 × 900 | 1440 × 900 / 1440 × 900 | map 668 × 691; actions 332 × 691; tabs 392 × 691 | action scroller 657 / 714 px; Atlas scroller 612 / 2125 px; no overlap |
+| Setup and active, 390 × 844 | 375 px measured layout width / 375 px scroll width | intentional vertical stack | no horizontal overflow or overlap; status → map → actions → tabs order |
+
+The in-app browser's 390 CSS-pixel override reported a 375-pixel layout viewport, so both its client
+and scroll widths are recorded rather than claiming an unavailable 390-pixel layout width. Setup and
+active flows, tab selection and arrow-key movement, action visibility, panel scrolling, and Start
+Expedition reachability were inspected. The browser console contained no warnings or errors.
+
 - Atlas chart: fixed SVG presentation coordinates for the 12 provisional scenario nodes, filtered
   strictly by safe known node and route IDs; ordinary DOM route controls provide equivalent use.
 - Expedition panel: phase-specific, affordance-driven instrument, travel, Observation, salvage,
@@ -128,3 +183,10 @@ API, database, networking, accounts, multiplayer synchronization, hosted persist
 payments, production security, infrastructure, final branding, unrestricted social text, Trace
 recovery commands not yet present in the core, or the deferred Waystation contribution rule. Those
 remain later-phase work subject to the project evidence gates.
+
+The 1366 × 768 setup and active mission content can require scrolling inside the bounded action
+panel, and the intentionally stacked mobile layout requires ordinary document scrolling. Stage 1
+does not implement Revision 0.2 Commissions, Provisions/Charges, Return Reserve, Findings,
+preparation spending, salvage redesign, route-evidence redesign, or Expedition completion summaries.
+It does not change Supply, Integrity, costs, rewards, outcomes, Drift, protocol, authority semantics,
+or command-log persistence.

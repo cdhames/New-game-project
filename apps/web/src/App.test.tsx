@@ -79,7 +79,7 @@ describe("player-facing browser prototype", () => {
     render(<App storage={new MemoryStorage()} />);
     await user.click(screen.getByRole("button", { name: "Start Expedition" }));
     expect(
-      screen.getByText("No legal Observation is available with this loadout and supply."),
+      screen.getByText("No legal Observation with the selected instruments and remaining Supply."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Salvage opportunity/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Travel toward Whisper Shoal" }));
@@ -209,8 +209,8 @@ describe("player-facing browser prototype", () => {
     expect(screen.getByRole("checkbox", { name: /Weather Glass/ })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Field Lens/ })).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Start Expedition" })).toBeEnabled();
-    await user.click(screen.getByText("Developer details"));
-    expect(screen.getByText("Accepted local commands: 0")).toBeInTheDocument();
+    await user.click(screen.getByText("About and developer details"));
+    expect(screen.getByText(/Accepted local commands: 0/)).toBeInTheDocument();
     expect(storage.getItem(LOCAL_RECORD_KEY)).toBeNull();
     expect(storage.getItem("unrelated")).toBe("preserve-me");
   });
@@ -248,5 +248,74 @@ describe("player-facing browser prototype", () => {
     expect(
       screen.getAllByText("No later known Drift warning", { exact: false }).length,
     ).toBeGreaterThan(0);
+  });
+
+  it("renders the deliberate shell regions and three accessible tabs with Atlas selected", () => {
+    render(<App storage={new MemoryStorage()} />);
+    expect(screen.getByTestId("status-bar")).toBeInTheDocument();
+    expect(screen.getByTestId("map-workspace")).toBeInTheDocument();
+    expect(screen.getByTestId("mission-action-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("secondary-tabs")).toBeInTheDocument();
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs).toHaveLength(3);
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Atlas", "Logbook", "Activity"]);
+    expect(screen.getByRole("tab", { name: "Atlas" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "Atlas" })).toBeVisible();
+    expect(screen.queryByRole("tabpanel", { name: "Activity" })).not.toBeInTheDocument();
+  });
+
+  it("activates one secondary panel at a time and supports arrow-key tab movement", async () => {
+    const user = userEvent.setup();
+    render(<App storage={new MemoryStorage()} />);
+    const atlas = screen.getByRole("tab", { name: "Atlas" });
+    atlas.focus();
+    await user.keyboard("{ArrowRight}");
+    const logbook = screen.getByRole("tab", { name: "Logbook" });
+    expect(logbook).toHaveFocus();
+    expect(logbook).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "Logbook" })).toBeVisible();
+    expect(screen.queryByRole("tabpanel", { name: "Atlas" })).not.toBeInTheDocument();
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("tab", { name: "Activity" })).toHaveFocus();
+    expect(screen.getByRole("tabpanel", { name: "Activity" })).toBeVisible();
+    await user.keyboard("{ArrowLeft}");
+    expect(logbook).toHaveFocus();
+  });
+
+  it("keeps all Expedition action categories visible and puts safe Travel controls in the action panel", async () => {
+    const user = userEvent.setup();
+    render(<App storage={new MemoryStorage()} />);
+    await user.click(screen.getByRole("button", { name: "Start Expedition" }));
+    const panel = screen.getByTestId("mission-action-panel");
+    for (const heading of ["Travel", "Observe", "Salvage", "Return"])
+      expect(within(panel).getByRole("heading", { name: heading })).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("button", { name: "Travel toward Whisper Shoal" }),
+    ).toBeEnabled();
+    expect(within(panel).getByText(/No legal Observation/)).toBeInTheDocument();
+    expect(within(panel).getByText("No currently salvageable opportunity.")).toBeInTheDocument();
+    expect(within(panel).getByText(/Return becomes available/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Equivalent ordinary Travel controls are in the mission action panel/),
+    ).toBeInTheDocument();
+  });
+
+  it("updates safe actions after travel without revealing hidden topology anywhere", async () => {
+    const user = userEvent.setup();
+    render(<App storage={new MemoryStorage()} />);
+    await user.click(screen.getByRole("button", { name: "Start Expedition" }));
+    await user.click(screen.getByRole("button", { name: "Travel toward Whisper Shoal" }));
+    const panel = screen.getByTestId("mission-action-panel");
+    expect(
+      within(panel).getByRole("button", { name: "Travel toward Lantern Harbor" }),
+    ).toBeInTheDocument();
+    expect(within(panel).getAllByRole("button", { name: /Observe/ }).length).toBeGreaterThan(0);
+    expect(
+      within(panel).getByRole("button", { name: "Salvage opportunity at Whisper Shoal" }),
+    ).toBeInTheDocument();
+    expect(within(panel).getByRole("heading", { name: "Return" })).toBeInTheDocument();
+    const rendered = document.body.textContent ?? "";
+    expect(rendered).not.toContain("Last Cairn");
+    expect(rendered).not.toContain("r-ol");
   });
 });

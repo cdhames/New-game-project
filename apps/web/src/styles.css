@@ -178,8 +178,7 @@ h3 {
 }
 .control-panel {
   align-self: start;
-  position: sticky;
-  top: 1rem;
+  position: static;
   border-color: rgba(237, 204, 134, 0.36);
 }
 .section-heading {
@@ -679,5 +678,335 @@ h3 {
     scroll-behavior: auto !important;
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* Revision 0.2 Stage 1 application shell */
+.game-shell {
+  width: 100%;
+  min-width: 0;
+}
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: clamp(1rem, 2vw, 2rem);
+  padding: 0.7rem clamp(0.75rem, 2vw, 1.5rem);
+  border-bottom: 1px solid var(--line);
+  background: rgba(7, 21, 25, 0.94);
+}
+.brand-block {
+  flex: 0 0 auto;
+  min-width: 13rem;
+}
+.brand-block .eyebrow,
+.brand-block h1,
+.brand-block p {
+  margin-bottom: 0.2rem;
+}
+.brand-block h1 {
+  font-size: clamp(1.7rem, 2.6vw, 2.6rem);
+  line-height: 1;
+}
+.claims-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.status-metrics {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(5.5rem, 1fr));
+  gap: 0.45rem;
+}
+.status-metrics div {
+  min-width: 0;
+  padding-left: 0.65rem;
+  border-left: 1px solid var(--line);
+}
+.status-metrics dt {
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.status-metrics dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.game-workspace {
+  min-width: 0;
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+.map-workspace,
+.mission-action-panel,
+.secondary-tabs {
+  min-width: 0;
+  min-height: 0;
+}
+.map-workspace {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.map-heading {
+  flex: 0 0 auto;
+}
+.map-heading h2,
+.map-heading .eyebrow {
+  margin-bottom: 0.25rem;
+}
+.map-workspace .map-frame {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.map-workspace .atlas-map {
+  flex: 1;
+  min-height: 0;
+}
+.map-workspace .map-legend {
+  flex: 0 0 auto;
+}
+.mission-action-panel {
+  padding: 0;
+  border-color: rgba(237, 204, 134, 0.36);
+  overflow: hidden;
+}
+.panel-scroll,
+.tab-panel-scroll {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.panel-scroll {
+  padding: 1rem;
+}
+.panel-scroll h2 {
+  font-size: 1.45rem;
+}
+.instrument-grid {
+  grid-template-columns: 1fr;
+}
+.instrument-card {
+  padding: 0.65rem;
+}
+.instrument-card > span:not(.instrument-name, .selected-word) {
+  font-size: 0.82rem;
+}
+.action-group {
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+}
+.action-group h3 {
+  margin-bottom: 0.45rem;
+}
+.button-stack {
+  gap: 0.4rem;
+}
+.unavailable-state {
+  margin: 0;
+  padding: 0.6rem 0.7rem;
+  border: 1px dashed var(--line);
+  border-radius: 0.35rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.instrument-summary {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.failure-action {
+  margin-top: 0.8rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--warning);
+}
+.secondary-tabs {
+  padding: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+.tab-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-bottom: 1px solid var(--line);
+}
+.tab-list button {
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: rgba(10, 31, 35, 0.8);
+}
+.tab-list button:last-child {
+  border-right: 0;
+}
+.tab-list button[aria-selected="true"] {
+  color: var(--glow-strong);
+  background: #173b3f;
+  box-shadow: inset 0 -3px 0 var(--gold);
+}
+.tab-panel-scroll {
+  padding: 0 1rem 1rem;
+}
+.tab-panel-scroll [role="tabpanel"] {
+  min-height: 100%;
+  padding-top: 1rem;
+}
+.tab-content h2 {
+  font-size: 1.4rem;
+}
+.tab-content .section-heading {
+  align-items: end;
+}
+.tab-content .filter-label {
+  min-width: 8.5rem;
+}
+.topology-reference {
+  margin-bottom: 0.8rem;
+  padding: 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+}
+.topology-reference summary {
+  min-height: 44px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.tab-content .claim-grid,
+.tab-content .route-list {
+  grid-template-columns: 1fr;
+}
+.tab-content .claim-card {
+  padding: 0.75rem;
+}
+.utility-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.35rem 0.75rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  background: rgba(7, 21, 25, 0.94);
+  font-size: 0.78rem;
+}
+.utility-bar details {
+  min-width: 0;
+}
+.utility-bar summary {
+  cursor: pointer;
+}
+.utility-bar details[open] {
+  position: relative;
+}
+.utility-bar details[open] p {
+  margin: 0.4rem 0;
+}
+.utility-bar button {
+  flex: 0 0 auto;
+}
+.game-shell .status-region {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (min-width: 1100px) {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+  .game-shell {
+    height: 100vh;
+    height: 100dvh;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    overflow: hidden;
+  }
+  .game-workspace {
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1.45fr) minmax(19rem, 0.72fr) minmax(20rem, 0.85fr);
+  }
+  .panel {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 1099px) {
+  .game-shell {
+    min-height: 100vh;
+  }
+  .status-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .status-metrics {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .game-workspace {
+    grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.8fr);
+  }
+  .secondary-tabs {
+    grid-column: 1 / -1;
+    height: min(34rem, 65vh);
+  }
+}
+
+@media (max-width: 720px) {
+  body {
+    overflow-x: hidden;
+  }
+  .status-bar {
+    padding: 0.65rem;
+  }
+  .status-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .game-workspace {
+    display: flex;
+    flex-direction: column;
+    padding: 0.65rem;
+  }
+  .map-workspace {
+    order: 1;
+  }
+  .mission-action-panel {
+    order: 2;
+  }
+  .secondary-tabs {
+    order: 3;
+    height: min(34rem, 70vh);
+  }
+  .map-workspace .atlas-map {
+    min-height: 240px;
+  }
+  .mission-action-panel .panel-scroll {
+    max-height: none;
+    overflow: visible;
+  }
+  .utility-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .tab-content .section-heading {
+    align-items: stretch;
   }
 }

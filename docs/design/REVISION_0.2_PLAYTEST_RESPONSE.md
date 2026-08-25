@@ -15,6 +15,13 @@ do not yet satisfy Phase 1.
 All numeric values in this document are reversible initial tuning parameters, not permanent design
 law.
 
+**Implementation status:** Stage 1 application-shell work is implemented on
+`feature/phase1-browser-prototype`. It provides the single-screen desktop shell, bounded panel
+scrolling, stable active-Expedition action categories, mission-panel Travel controls, accessible
+secondary tabs, and intentional mobile order. Stages 2–7 remain planned. In particular,
+Commissions, the Provisions/Charges redesign, Return Reserve, Findings, preparation spending,
+route-evidence redesign, and completion summaries are not implemented.
+
 ## 1. Desktop information architecture
 
 The desktop application will be a deliberate single-screen game shell rather than one long webpage:
@@ -208,15 +215,15 @@ Without expanding the map, Revision 0.2 must prove that the compact region suppo
 
 No stage below is implemented by this document.
 
-| Stage | Work | Primary ownership |
-| ---: | --- | --- |
-| 1 | Application shell, panel hierarchy, desktop scrolling correction, mobile stack | Browser-only presentation and layout |
-| 2 | Revised player-safe projection fields and player-facing resource terminology | Protocol and game core, then browser rendering |
-| 3 | Commission generation/progress/completion and Findings earning/banking | Protocol and game core, then browser controls and presentation |
-| 4 | Return Reserve, base Provisions, instrument Charges, salvage cost, Vessel Integrity, restoration and warnings | Protocol and game core for rules/projection; browser for explanation and warnings |
-| 5 | Player-safe route-evidence projection and decision-time presentation | Protocol/game core filtering; browser presentation |
-| 6 | Expedition summary and temporary preparation spending | Protocol/game core for outcomes and purchases; browser summary and preparation UI |
-| 7 | Unit, property, replay, simulation, browser, responsive and accessibility validation; second owner playtest | All affected packages and browser; documentation for evidence |
+| Stage | Status | Work | Primary ownership |
+| ---: | --- | --- | --- |
+| 1 | Implemented on this branch | Application shell, panel hierarchy, desktop scrolling correction, mobile stack | Browser-only presentation and layout |
+| 2 | Planned | Revised player-safe projection fields and player-facing resource terminology | Protocol and game core, then browser rendering |
+| 3 | Planned | Commission generation/progress/completion and Findings earning/banking | Protocol and game core, then browser controls and presentation |
+| 4 | Planned | Return Reserve, base Provisions, instrument Charges, salvage cost, Vessel Integrity, restoration and warnings | Protocol and game core for rules/projection; browser for explanation and warnings |
+| 5 | Planned | Player-safe route-evidence projection and decision-time presentation | Protocol/game core filtering; browser presentation |
+| 6 | Planned | Expedition summary and temporary preparation spending | Protocol/game core for outcomes and purchases; browser summary and preparation UI |
+| 7 | Planned | Unit, property, replay, simulation, browser, responsive and accessibility validation; second owner playtest | All affected packages and browser; documentation for evidence |
 
 Stages that change commands, events, canonical state, deterministic rules, resource accounting,
 Commission state, reward state, or safe projections require protocol/game-core work and replay
