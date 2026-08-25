@@ -20,6 +20,12 @@ This evidence-gated roadmap makes no calendar promises. Each phase can pause, na
 
 **Validation gate:** deterministic acceptance targets and basic usability loop pass without network or database.
 
+**Current evidence:** the deterministic core and first browser prototype exist, but the first owner
+browser playtest failed comprehension, motivation, interface coherence, and strategic-depth gates.
+Phase 1 remains open pending implementation and validation of the
+[Revision 0.2 playtest response](../design/REVISION_0.2_PLAYTEST_RESPONSE.md), followed by a second
+owner playtest.
+
 **Pause/revise if:** uncertainty is unintelligible, choices collapse, replay cannot remain deterministic, or scope exceeds a small slice.
 
 ## Phase 2: Simulated shared Atlas and bot testing

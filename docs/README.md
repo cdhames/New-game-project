@@ -12,6 +12,13 @@ These documents define the current project baseline. More specific decision reco
 - [Game Vision](design/GAME_VISION.md) — player promise, identity, pillars, anti-pillars, ethics, visual direction, and risks.
 - [Core Loop and Systems](design/CORE_LOOP_AND_SYSTEMS.md) — authoritative system-level design, terminology, and launch/future boundaries.
 - [MVP Specification](design/MVP_SPEC.md) — scoped first playable vertical slice, tuning parameters, acceptance tests, and reconsideration gates.
+- [Revision 0.2 Playtest Response](design/REVISION_0.2_PLAYTEST_RESPONSE.md) — authoritative
+  provisional redesign direction following the first browser playtest.
+
+## Playtests
+
+- [PLAYTEST-0001: First Owner Browser Playtest](playtests/PLAYTEST-0001-owner.md) — direct player
+  observations, project-lead diagnosis, resulting decisions, and questions for later testing.
 
 ## Architecture and validation
 

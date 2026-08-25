@@ -4,6 +4,15 @@
 
 Build the smallest vertical slice that can disprove or support the player-authored Atlas premise. This is a specification, not evidence that a build exists.
 
+## Browser validation status
+
+The [first owner browser playtest](../playtests/PLAYTEST-0001-owner.md) failed the comprehension,
+motivation, interface, and strategic-depth gates. The map and exploration premise remain a positive
+signal, but Phase 1 cannot be considered complete until the substantial
+[Revision 0.2 response](REVISION_0.2_PLAYTEST_RESPONSE.md) is implemented and validated. Revision 0.2
+is planned work; its Commission, resource, reward, salvage, route-evidence, shell, and summary systems
+do not yet exist merely because they are specified.
+
 ## Proof obligations
 
 The slice must demonstrate route planning from incomplete information; a short risk/reward Expedition; selective Observation and publication; visible Atlas change; at least one Report becoming stale; cross-session consequence; meaningful solo-human play; and deterministic replay/simulation.
