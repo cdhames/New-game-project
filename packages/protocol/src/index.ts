@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 3 as const;
+export const PROTOCOL_VERSION = 4 as const;
 const stableId = z.string().regex(/^[a-z][a-z0-9-]{0,63}$/);
 export const StableIdSchema = stableId;
 export type StableId = z.infer<typeof StableIdSchema>;
@@ -155,6 +155,46 @@ export interface AtlasClaim extends ReportRecord {
   potentiallyStale: boolean;
   independentCorroboration: number;
 }
+export const RouteEvidenceClaimSchema = z.object({
+  reportId: stableId,
+  category: z.enum(["route", "hazard", "condition"]),
+  reportedValue: z.union([z.string(), z.number()]),
+  age: z.number().int().nonnegative(),
+  quality: EvidenceQualitySchema,
+  sourceClass: SourceClassSchema,
+  independentCorroboration: z.number().int().nonnegative(),
+  potentiallyStale: z.boolean(),
+  observedRevision: WorldRevisionSchema,
+});
+export type RouteEvidenceClaim = z.infer<typeof RouteEvidenceClaimSchema>;
+export const RouteEvidenceCategorySchema = z.object({
+  state: z.enum(["unknown", "single-value", "conflicting-values"]),
+  claims: z.array(RouteEvidenceClaimSchema),
+});
+export type RouteEvidenceCategory = z.infer<typeof RouteEvidenceCategorySchema>;
+export const SafeTravelOptionSchema = z.object({
+  routeId: stableId,
+  destinationNodeId: stableId,
+  provisionCost: z.literal(1),
+  destinationVisited: z.boolean(),
+  projectedProvisions: z.number().int().nonnegative(),
+  projectedReturnReserve: z.number().int().nonnegative().nullable(),
+  projectedProvisionMargin: z.number().int().nullable(),
+  projectedReturnReserveWarning: z.enum([
+    "at-waystation",
+    "comfortable",
+    "caution",
+    "at-reserve",
+    "below-reserve",
+    "route-unknown",
+  ]),
+  evidence: z.object({
+    route: RouteEvidenceCategorySchema,
+    hazard: RouteEvidenceCategorySchema,
+    condition: RouteEvidenceCategorySchema,
+  }),
+});
+export type SafeTravelOption = z.infer<typeof SafeTravelOptionSchema>;
 export const SafeRouteDescriptorSchema = z.object({ id: stableId, a: stableId, b: stableId });
 export type SafeRouteDescriptor = z.infer<typeof SafeRouteDescriptorSchema>;
 export const ObservationAffordanceSchema = z.object({
@@ -185,7 +225,7 @@ export const SafeSalvageDescriptorSchema = z.object({
 });
 export type SafeSalvageDescriptor = z.infer<typeof SafeSalvageDescriptorSchema>;
 export const ActionAffordancesSchema = z.object({
-  traversableRouteIds: z.array(stableId),
+  travelOptions: z.array(SafeTravelOptionSchema),
   observations: z.array(ObservationAffordanceSchema),
   salvageableOpportunities: z.array(SafeSalvageDescriptorSchema),
   canResolveReturn: z.boolean(),
@@ -241,19 +281,64 @@ export interface PreparationCatalog {
   maximumExtraChargePerInstrument: 1;
   bankedFindings: number;
 }
-export interface PreviousCommissionResult {
+export interface ExpeditionResourceSnapshot {
+  provisions: number;
+  maximumProvisions: number;
+  vesselIntegrity: number;
+  maximumVesselIntegrity: number;
+  bankedFindings: number;
+  unbankedFindings: number;
+}
+export interface SafeRouteLeg {
+  routeId: StableId;
+  originNodeId: StableId;
+  destinationNodeId: StableId;
+  damageSustained: boolean;
+}
+export interface SafeSalvageOutcome {
+  opportunityId: StableId;
+  family: SalvageFamily;
+  provisionCost: number;
+  nominalValue: number;
+  appliedValue: number;
+  netProvisionChange: number;
+  resultingProvisions: number;
+  resultingVesselIntegrity: number;
+  resultingUnbankedFindings: number;
+}
+export interface ExpeditionOutcomeSummary {
+  expeditionId: StableId;
+  outcome: "returned" | "failed";
+  failureReason: "stranded" | "vessel-integrity" | null;
   commissionId: StableId;
   family: CommissionOffer["family"];
-  result: "success" | "failure" | "incomplete";
-  objectiveMet: boolean;
-  findingsRewardOffered: number;
-  findingsRewardGranted: number;
-  publicationRequired: boolean;
-  requiredPublicationOccurred: boolean;
-  preparationFindingsSpent: number;
   subjectId?: StableId;
   targetLocationId?: StableId;
-  expeditionId: StableId;
+  commissionResult: "success" | "failure" | "incomplete";
+  commissionObjectiveMet: boolean;
+  commissionFindingsOffered: number;
+  commissionFindingsGranted: number;
+  publicationRequired: boolean;
+  requiredPublicationOccurred: boolean;
+  publicationStatus: "pending" | "completed" | "not-applicable";
+  preparation: PreparationPlan;
+  preparationFindingsSpent: number;
+  startingResources: ExpeditionResourceSnapshot;
+  endingResources: ExpeditionResourceSnapshot;
+  routeLegs: SafeRouteLeg[];
+  visitedLocationIds: StableId[];
+  totalDamageSustained: number;
+  observationIds: StableId[];
+  retainedObservationIds: StableId[];
+  lostObservationIds: StableId[];
+  salvageOutcomes: SafeSalvageOutcome[];
+  findingsRecoveredFromSalvage: number;
+  findingsBankedOnReturn: number;
+  findingsLostOnFailure: number;
+  publishedReportIds: StableId[];
+  atlasContributionAdded: number;
+  traceId: StableId | null;
+  bankedFindingsAfter: number;
 }
 export interface PlayerSafeProjection {
   protocolVersion: typeof PROTOCOL_VERSION;
@@ -267,7 +352,8 @@ export interface PlayerSafeProjection {
   commissionOffers: CommissionOffer[];
   activeCommission: ActiveCommission | null;
   preparationCatalog: PreparationCatalog;
-  previousCommissionResult: PreviousCommissionResult | null;
+  currentExpeditionSummary: ExpeditionOutcomeSummary | null;
+  previousExpeditionSummary: ExpeditionOutcomeSummary | null;
   expeditionResources: ActiveExpeditionResources | null;
   selectedInstruments: Instrument[];
   knownRoutes: SafeRouteDescriptor[];

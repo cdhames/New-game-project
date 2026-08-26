@@ -89,17 +89,17 @@ function SetupControls(props: MissionControlProps): React.JSX.Element {
           Trace is in the Logbook. Banked Findings remain {projection.waystation.bankedFindings}.
         </div>
       ) : null}
-      {projection.previousCommissionResult ? (
+      {projection.previousExpeditionSummary ? (
         <article className="commission-result-card" aria-label="Previous Commission result">
           <strong>
-            Previous Commission: {humanize(projection.previousCommissionResult.result)}
+            Previous Commission: {humanize(projection.previousExpeditionSummary.commissionResult)}
           </strong>
           <span>
-            {projection.previousCommissionResult.findingsRewardGranted} of{" "}
-            {projection.previousCommissionResult.findingsRewardOffered} Findings granted
+            {projection.previousExpeditionSummary.commissionFindingsGranted} of{" "}
+            {projection.previousExpeditionSummary.commissionFindingsOffered} Findings granted
           </span>
           <span>
-            Preparation spent: {projection.previousCommissionResult.preparationFindingsSpent}
+            Preparation spent: {projection.previousExpeditionSummary.preparationFindingsSpent}
           </span>
           <span>
             Banked Findings: {projection.waystation.bankedFindings} · Atlas Contribution:{" "}
@@ -254,9 +254,7 @@ function SetupControls(props: MissionControlProps): React.JSX.Element {
 function ExpeditionControls(props: MissionControlProps): React.JSX.Element {
   const { projection } = props;
   const resources = projection.expeditionResources!;
-  const routes = projection.actions.traversableRouteIds
-    .map((routeId) => projection.knownRoutes.find((route) => route.id === routeId))
-    .filter((route) => route !== undefined);
+  const routes = projection.actions.travelOptions;
   return (
     <>
       <p className="eyebrow">Expedition underway</p>
@@ -299,15 +297,14 @@ function ExpeditionControls(props: MissionControlProps): React.JSX.Element {
       <ActionGroup title="Travel">
         {routes.length ? (
           routes.map((route) => {
-            const destination = route.a === projection.locationId ? route.b : route.a;
             return (
               <button
-                key={route.id}
+                key={route.routeId}
                 type="button"
                 disabled={props.disabled}
-                onClick={() => props.dispatch({ kind: "travel", routeId: route.id })}
+                onClick={() => props.dispatch({ kind: "travel", routeId: route.routeId })}
               >
-                Travel toward {displayName(destination)}
+                Travel toward {displayName(route.destinationNodeId)}
               </button>
             );
           })

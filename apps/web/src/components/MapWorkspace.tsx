@@ -7,7 +7,7 @@ export function MapWorkspace({
   projection: PlayerSafeProjection;
 }): React.JSX.Element {
   const knownNodes = new Set(projection.knownNodeIds);
-  const traversable = new Set(projection.actions.traversableRouteIds);
+  const traversable = new Set(projection.actions.travelOptions.map((option) => option.routeId));
   return (
     <section
       className="map-workspace panel"

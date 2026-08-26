@@ -369,7 +369,7 @@ describe("player-facing browser prototype", () => {
     const user = userEvent.setup();
     render(<App storage={storage} confirmReset={() => true} />);
     expect(
-      screen.getByText(/deterministic Commission and preparation rules changed/i),
+      screen.getByText(/Route evidence and Expedition outcome rules changed/i),
     ).toBeInTheDocument();
     expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY)).not.toBeNull();
     await user.click(screen.getByRole("button", { name: "Reset local prototype" }));

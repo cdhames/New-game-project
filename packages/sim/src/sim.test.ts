@@ -43,19 +43,19 @@ describe("player-safe action contract", () => {
     const initial = createInitialState(31);
     const begun = accepted(initial, start);
     const departed = accepted(begun, {
-      protocolVersion: 3,
+      protocolVersion: PROTOCOL_VERSION,
       commandId: "test-depart",
       kind: "travel",
       routeId: "r-hs",
     });
     const returnedHome = accepted(departed, {
-      protocolVersion: 3,
+      protocolVersion: PROTOCOL_VERSION,
       commandId: "test-home",
       kind: "travel",
       routeId: "r-hs",
     });
     const resolved = accepted(returnedHome, {
-      protocolVersion: 3,
+      protocolVersion: PROTOCOL_VERSION,
       commandId: "test-resolve",
       kind: "resolve-return",
     });
@@ -221,7 +221,7 @@ describe("headless simulation", () => {
   it("surfaces command-stream rejection context", () => {
     const replay = replayCommands(1, [
       {
-        protocolVersion: 3,
+        protocolVersion: PROTOCOL_VERSION,
         commandId: "invalid-replay-return",
         kind: "resolve-return",
       },

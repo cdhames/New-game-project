@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PROTOCOL_VERSION } from "@long-map/protocol";
 import {
   createLocalAuthority,
   DEFAULT_DEVELOPMENT_SEED,
@@ -215,12 +216,12 @@ describe("local browser authority", () => {
       LOCAL_RECORD_KEY,
       JSON.stringify({
         version: LOCAL_RECORD_VERSION,
-        protocolVersion: 3,
-        scenarioVersion: "1.2.0",
+        protocolVersion: PROTOCOL_VERSION,
+        scenarioVersion: "1.3.0",
         seed: DEFAULT_DEVELOPMENT_SEED,
         commands: [
           {
-            protocolVersion: 3,
+            protocolVersion: PROTOCOL_VERSION,
             commandId: "local-command-1",
             kind: "start-expedition",
             instruments: ["sounding-line", "weather-glass"],
@@ -232,7 +233,7 @@ describe("local browser authority", () => {
             },
           },
           {
-            protocolVersion: 3,
+            protocolVersion: PROTOCOL_VERSION,
             commandId: "local-command-4",
             kind: "travel",
             routeId: "r-hs",
@@ -251,12 +252,12 @@ describe("local browser authority", () => {
       LOCAL_RECORD_KEY,
       JSON.stringify({
         version: LOCAL_RECORD_VERSION,
-        protocolVersion: 3,
-        scenarioVersion: "1.2.0",
+        protocolVersion: PROTOCOL_VERSION,
+        scenarioVersion: "1.3.0",
         seed: DEFAULT_DEVELOPMENT_SEED,
         commands: [
           {
-            protocolVersion: 3,
+            protocolVersion: PROTOCOL_VERSION,
             commandId: "imported-command",
             kind: "start-expedition",
             instruments: ["sounding-line", "weather-glass"],

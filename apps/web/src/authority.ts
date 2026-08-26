@@ -20,8 +20,9 @@ import { displayName } from "./presentation";
 
 export const LEGACY_LOCAL_RECORD_KEY = "the-long-map.local-prototype.v1";
 export const LEGACY_LOCAL_RECORD_KEY_V2 = "the-long-map.local-prototype.v2";
-export const LOCAL_RECORD_KEY = "the-long-map.local-prototype.v3";
-export const LOCAL_RECORD_VERSION = 3 as const;
+export const LEGACY_LOCAL_RECORD_KEY_V3 = "the-long-map.local-prototype.v3";
+export const LOCAL_RECORD_KEY = "the-long-map.local-prototype.v4";
+export const LOCAL_RECORD_VERSION = 4 as const;
 export const DEFAULT_DEVELOPMENT_SEED = 20_260_804;
 
 export interface LocalRecord {
@@ -245,11 +246,13 @@ export class LocalAuthority {
     if (
       !raw &&
       (storage.getItem(LEGACY_LOCAL_RECORD_KEY) !== null ||
-        storage.getItem(LEGACY_LOCAL_RECORD_KEY_V2) !== null)
+        storage.getItem(LEGACY_LOCAL_RECORD_KEY_V2) !== null ||
+        storage.getItem(LEGACY_LOCAL_RECORD_KEY_V3) !== null)
     )
       return {
         ok: false,
-        message: `The deterministic Commission and preparation rules changed in Revision 0.2. ${storage.getItem(LEGACY_LOCAL_RECORD_KEY_V2) !== null ? "Version-2" : "Version-1"} history was found; it cannot be replayed safely and remains untouched until you confirm reset.`,
+        message:
+          "A version-1, version-2, or version-3 history was found. Route evidence and Expedition outcome rules changed in version 4, so legacy history cannot be replayed safely and remains untouched until you confirm reset.",
       };
     const record = raw
       ? (() => {
@@ -358,6 +361,7 @@ export class LocalAuthority {
     this.storage.removeItem(LOCAL_RECORD_KEY);
     this.storage.removeItem(LEGACY_LOCAL_RECORD_KEY);
     this.storage.removeItem(LEGACY_LOCAL_RECORD_KEY_V2);
+    this.storage.removeItem(LEGACY_LOCAL_RECORD_KEY_V3);
   }
 }
 

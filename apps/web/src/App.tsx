@@ -4,6 +4,7 @@ import {
   createLocalAuthority,
   LEGACY_LOCAL_RECORD_KEY,
   LEGACY_LOCAL_RECORD_KEY_V2,
+  LEGACY_LOCAL_RECORD_KEY_V3,
   LOCAL_RECORD_KEY,
   type AuthorityLoadResult,
   type StoragePort,
@@ -68,6 +69,7 @@ export function App({
     storage.removeItem(LOCAL_RECORD_KEY);
     storage.removeItem(LEGACY_LOCAL_RECORD_KEY);
     storage.removeItem(LEGACY_LOCAL_RECORD_KEY_V2);
+    storage.removeItem(LEGACY_LOCAL_RECORD_KEY_V3);
     setSelectedReports([]);
     setSelectedInstruments(["sounding-line", "weather-glass"]);
     setSelectedCommissionId(null);

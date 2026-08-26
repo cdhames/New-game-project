@@ -43,6 +43,11 @@ export interface RunMetrics {
   atlasContribution: number;
   preparationFindingsSpent: number;
   selectedPreparationCount: number;
+  unknownHazardRouteChoices: number;
+  conflictingEvidenceRouteChoices: number;
+  minimumProjectedMargin: number | null;
+  commissionRelevantTravelChoices: number;
+  summaryOutcome: "returned" | "failed" | null;
   checksum: string;
   replay: ReplayRecord;
 }
@@ -68,6 +73,11 @@ export interface Aggregate {
   averageAtlasContribution: number;
   averagePreparationFindingsSpent: number;
   averageSelectedPreparationCount: number;
+  unknownHazardRouteChoices: number;
+  conflictingEvidenceRouteChoices: number;
+  minimumProjectedMargin: number | null;
+  commissionRelevantTravelChoices: number;
+  summaryOutcomeCounts: Record<string, number>;
   salvageFamilyOutcomes: Record<"findings-cache" | "provision-cache" | "repair-material", number>;
   returnReserveWarningsEncountered: Record<string, number>;
   terminalChecksumSummary: string;
@@ -184,7 +194,7 @@ export function legalCommands(view: PlayerSafeProjection, sequence: number): Pla
         },
       });
     }
-  for (const routeId of view.actions.traversableRouteIds) add("travel", { routeId });
+  for (const option of view.actions.travelOptions) add("travel", { routeId: option.routeId });
   for (const observation of view.actions.observations) add("observe", observation);
   for (const opportunity of view.actions.salvageableOpportunities)
     add("salvage", { opportunityId: opportunity.opportunityId });
@@ -221,8 +231,7 @@ function graphDistances(view: PlayerSafeProjection, origin: StableId): Map<Stabl
 }
 
 function destination(view: PlayerSafeProjection, routeId: StableId): StableId {
-  const route = view.knownRoutes.find((item) => item.id === routeId)!;
-  return route.a === view.locationId ? route.b : route.a;
+  return view.actions.travelOptions.find((option) => option.routeId === routeId)!.destinationNodeId;
 }
 
 function routeToward(
@@ -407,6 +416,10 @@ export function runExpedition(policy: PolicyName, seed: number, stepLimit = 40):
   let published = false;
   let lastExpeditionResources: { provisions: number; vesselIntegrity: number } | null = null;
   const returnReserveWarningsEncountered: Record<string, number> = {};
+  let unknownHazardRouteChoices = 0;
+  let conflictingEvidenceRouteChoices = 0;
+  let minimumProjectedMargin: number | null = null;
+  let commissionRelevantTravelChoices = 0;
 
   while (steps < stepLimit) {
     const view = createPlayerProjection(state);
@@ -421,6 +434,31 @@ export function runExpedition(policy: PolicyName, seed: number, stepLimit = 40):
     const roll = nextRandom(policyRng);
     policyRng = roll.rng;
     const selected = chooseCommand(policy, view, legal, roll.value, waystationId);
+    if (selected.kind === "travel") {
+      const option = view.actions.travelOptions.find((item) => item.routeId === selected.routeId);
+      if (option?.evidence.hazard.state === "unknown") unknownHazardRouteChoices += 1;
+      if (
+        option &&
+        Object.values(option.evidence).some((category) => category.state === "conflicting-values")
+      )
+        conflictingEvidenceRouteChoices += 1;
+      if (
+        option?.projectedProvisionMargin !== null &&
+        option?.projectedProvisionMargin !== undefined
+      )
+        minimumProjectedMargin =
+          minimumProjectedMargin === null
+            ? option.projectedProvisionMargin
+            : Math.min(minimumProjectedMargin, option.projectedProvisionMargin);
+      const commission = view.activeCommission?.offer;
+      if (
+        option &&
+        commission &&
+        (commission.family === "reach-frontier" || commission.family === "recover-salvage") &&
+        commission.targetLocationId === option.destinationNodeId
+      )
+        commissionRelevantTravelChoices += 1;
+    }
     const result = applyCommand(state, selected);
     commands.push(selected);
     steps += 1;
@@ -463,7 +501,7 @@ export function runExpedition(policy: PolicyName, seed: number, stepLimit = 40):
     (item): item is Extract<PlayerCommand, { kind: "start-expedition" }> =>
       item.kind === "start-expedition",
   );
-  const result = state.previousCommissionResult;
+  const result = state.latestExpeditionSummary;
   const active = state.expedition;
   const salvageFamilyOutcomes = {
     "findings-cache": 0,
@@ -494,8 +532,8 @@ export function runExpedition(policy: PolicyName, seed: number, stepLimit = 40):
     reports: playerReports,
     commissionFamily: result?.family ?? active?.commission.family ?? null,
     commissionCompleted:
-      result?.result === "success" || active?.commissionProgress.status === "completed",
-    commissionFindingsGranted: result?.findingsRewardGranted ?? 0,
+      result?.commissionResult === "success" || active?.commissionProgress.status === "completed",
+    commissionFindingsGranted: result?.commissionFindingsGranted ?? 0,
     atlasContribution: state.atlasContribution,
     preparationFindingsSpent:
       result?.preparationFindingsSpent ?? active?.preparationFindingsSpent ?? 0,
@@ -504,6 +542,11 @@ export function runExpedition(policy: PolicyName, seed: number, stepLimit = 40):
         Number(startCommand.preparation.reinforcedVesselIntegrity) +
         startCommand.preparation.extraChargeInstruments.length
       : 0,
+    unknownHazardRouteChoices,
+    conflictingEvidenceRouteChoices,
+    minimumProjectedMargin,
+    commissionRelevantTravelChoices,
+    summaryOutcome: result?.outcome ?? null,
     checksum: terminalChecksum,
     replay: {
       protocolVersion: PROTOCOL_VERSION,
@@ -554,6 +597,28 @@ export function smokeStudy(count = 100): Aggregate[] {
       averageAtlasContribution: average((run) => run.atlasContribution),
       averagePreparationFindingsSpent: average((run) => run.preparationFindingsSpent),
       averageSelectedPreparationCount: average((run) => run.selectedPreparationCount),
+      unknownHazardRouteChoices: runs.reduce(
+        (total, run) => total + run.unknownHazardRouteChoices,
+        0,
+      ),
+      conflictingEvidenceRouteChoices: runs.reduce(
+        (total, run) => total + run.conflictingEvidenceRouteChoices,
+        0,
+      ),
+      minimumProjectedMargin: (() => {
+        const values = runs
+          .map((run) => run.minimumProjectedMargin)
+          .filter((value): value is number => value !== null);
+        return values.length ? Math.min(...values) : null;
+      })(),
+      commissionRelevantTravelChoices: runs.reduce(
+        (total, run) => total + run.commissionRelevantTravelChoices,
+        0,
+      ),
+      summaryOutcomeCounts: runs.reduce<Record<string, number>>((totals, run) => {
+        if (run.summaryOutcome) totals[run.summaryOutcome] = (totals[run.summaryOutcome] ?? 0) + 1;
+        return totals;
+      }, {}),
       salvageFamilyOutcomes: runs.reduce(
         (totals, run) => {
           for (const family of Object.keys(totals) as Array<keyof typeof totals>)
