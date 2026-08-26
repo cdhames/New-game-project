@@ -11,7 +11,7 @@ coherent breaking revision rather than presentation-only aliases.
 
 ## Decision
 
-Protocol 3 and scenario 1.2.0 retain 8 base Provisions, 4 base Vessel Integrity, and 2 base Charges for each
+Protocol 4 and scenario 1.3.0 retain 8 base Provisions, 4 base Vessel Integrity, and 2 base Charges for each
 selected instrument. Travel costs 1 Provision; Observation costs one matching Charge and no
 Provision; salvage costs 1 Provision before resolving. Zero Vessel Integrity fails the Expedition.
 The Waystation restores the base loadout only when a new Expedition starts.
@@ -31,8 +31,8 @@ Resolved salvage events preserve both the nominal scenario value and the bounded
 applied, plus Provision cost, net Provision change, and resulting resource totals. Presentation uses
 the applied result so capped caches or repair never overstate their effect.
 
-Browser record version 3 uses a new key and stores protocol and scenario versions. Known v1/v2
-history is not migrated or replayed under changed rules; it remains untouched until confirmed targeted reset.
+Browser record version 4 stores protocol and scenario versions. Known v1–v3 history is not migrated
+or replayed under changed rules; it remains untouched until confirmed targeted reset.
 
 ## Alternatives considered
 
@@ -52,5 +52,5 @@ provisional tuning that still needs simulation and playtest evidence.
 ADR-0006 extends these base maximums with one-Expedition preparation purchases and variable Charge
 maximums. Revise this decision if fixed-seed simulation exposes systematic legal-action dead ends or if
 playtests show reserve warnings, Charge scarcity, salvage value, or Findings banking are confusing or
-produce poor choices. The final route-evidence presentation and comprehensive completion summary
-remain planned.
+produce poor choices. ADR-0007 implements the final route-evidence presentation and comprehensive
+completion summary without changing these tuning values.

@@ -10,10 +10,12 @@ archipelago and decide which limited Observations to publish into a shared, impe
 This feature branch contains the first locally playable browser prototype plus the deterministic,
 headless TypeScript foundation for protocol, Expedition rules, replay, player-safe projections,
 tests, and seeded simulations. A local player can complete the Expedition, return or failure,
-publication, changed Atlas, and Drift loop in a responsive React interface. Protocol 3 and scenario
-1.2.0 implement the Revision 0.2 resource, purpose, and progression foundation: deterministic
-Commissions, temporary Findings-funded preparation, Atlas Contribution, variable maximum Charges,
-known-route Return Reserve, typed salvage, and a concise previous-Commission result.
+publication, changed Atlas, and Drift loop in a responsive React interface. Protocol 4 and scenario
+1.3.0 implement the Revision 0.2 technical candidate: deterministic Commissions, temporary
+Findings-funded preparation, Atlas Contribution, variable maximum Charges, authoritative route
+evidence and projected return consequences, typed salvage, Expedition journals, contextual guidance,
+and comprehensive return/failure/finalized summaries. The second owner playtest has not yet
+occurred.
 
 This is not a hosted online game. There is no production service, persistent online world, API,
 database, deployment, account system, secure server authority, networking, or telemetry collection.
@@ -45,6 +47,6 @@ Individual checks are `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm 
 deterministic machine-readable JSON; it validates infrastructure and is not evidence that the game
 is balanced.
 
-Browser history now uses the v3 local record. If a v1 or v2 prototype history is found, the app
-leaves it untouched and asks for a confirmed reset; reset removes only the known Long Map v1/v2/v3
+Browser history now uses the v4 local record. If a v1, v2, or v3 prototype history is found, the app
+leaves it untouched and asks for a confirmed reset; reset removes only the known Long Map v1–v4
 keys.

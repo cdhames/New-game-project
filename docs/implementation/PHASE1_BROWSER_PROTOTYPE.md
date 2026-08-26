@@ -33,9 +33,9 @@ for a competitive, shared, persistent, or production world.
 
 ## Command-log persistence
 
-The current localStorage key is `the-long-map.local-prototype.v3`. Its value stores only:
+The current localStorage key is `the-long-map.local-prototype.v4`. Its value stores only:
 
-- local record version `3`, protocol version `3`, and scenario version `1.2.0`;
+- local record version `4`, protocol version `4`, and scenario version `1.3.0`;
 - deterministic initial seed;
 - accepted, schema-valid `PlayerCommand` values in order.
 
@@ -55,9 +55,9 @@ accepted command list, and the sequence number in memory. A localStorage write f
 authority aligned with persisted history and presents a safe retry message. Domain events, canonical
 snapshots, and arbitrary React state are not persisted.
 
-If v3 is absent but a known v1 or v2 key exists, loading fails closed with a rules-version recovery
-screen and leaves both legacy records untouched. No speculative outcome migration is attempted.
-Confirmed reset removes only the known v1, v2, and v3 Long Map keys and creates a fresh deterministic
+If v4 is absent but a known v1, v2, or v3 key exists, loading fails closed with a rules-version
+recovery screen and leaves every legacy record untouched. No speculative outcome migration is
+attempted. Confirmed reset removes only the known v1, v2, v3, and v4 Long Map keys and creates a fresh deterministic
 world. The App increments an explicit authority generation and remounts the view-owning game shell,
 so a valid active session immediately displays the new fresh projection instead of retaining the
 previous shell's initialized view. Unrelated localStorage values are untouched.
@@ -111,12 +111,24 @@ generated only from `actions.traversableRouteIds` and known safe route descripto
 panel. The full known-topology text alternative remains in the Atlas tab as secondary reference. The
 SVG description points to the equivalent mission-panel controls.
 
+Travel uses core-projected route-decision cards rather than joining Reports in React. Every legal
+card shows destination, known cost, projected Provisions/Reserve/margin/warning, visited status, and
+route/hazard/condition claims with explicit Unknown or conflict wording and accessible claim details.
+The copy states that Reports are historical, Unknown is not safe, and projections exclude unknown
+damage. Player-safe Commission markers identify target routes and required Observation actions.
+
 Returned Commission copy distinguishes an outstanding safe return from a completed non-publication
 Commission and a Verify Report Commission awaiting publication. Every eligible matching Observation
 has a visible non-color `Satisfies Verify Report Commission` marker; unrelated Observations are not
 marked or automatically selected. Local Commission, preparation, and publication selections reset
 only after the authority confirms a persisted transition to idle or failed state, so rejected and
 storage-failed commands retain retry choices.
+
+Contextual phase guidance supplies one concise next step, and the bounded extra-Provisions select
+permits only 0, 1, or 2. Authoritative Return, Failure, and Previous Expedition summaries render
+route, damage, resources, Observations, salvage, Findings, reward, publication, Atlas Contribution,
+and Trace facts directly from the safe projection. Returned incomplete objectives explicitly say
+safe return completed and cannot be retroactively completed by unrelated publication.
 
 Sanitized salvage activity reports the actual bounded effect rather than the nominal scenario value:
 Provision caches state cost, restored amount, and net change; repair material distinguishes applied
@@ -198,7 +210,8 @@ Lifecycle regressions also cover returned Commission wording, Verify Report elig
 non-selection, storage-failed publication retry, and cleanup only after accepted terminal
 transitions.
 
-Existing protocol, core, property, replay, simulation, and smoke tests remain unchanged.
+Protocol, core, property, replay, simulation, smoke, and browser coverage now exercise the version-4
+travel-option, route-evidence, Expedition-journal, outcome-summary, and terminal-transition rules.
 
 ## Known limitations and deferred work
 
@@ -211,7 +224,7 @@ remain later-phase work subject to the project evidence gates.
 
 The 1366 × 768 setup and active mission content can require scrolling inside the bounded action
 panel, and the intentionally stacked mobile layout requires ordinary document scrolling. The current
-foundation implements deterministic Commissions, preparation spending, Atlas Contribution, and a
-concise previous-Commission result. It does not implement the final route-evidence redesign or
-comprehensive Expedition completion summary. It does not add new map content or
+foundation implements deterministic Commissions, preparation spending, Atlas Contribution,
+route-evidence decisions, contextual guidance, and comprehensive Expedition outcomes. It does not
+add new map content or
 production authority, persistence, or infrastructure.

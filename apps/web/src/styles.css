@@ -358,9 +358,86 @@ h3 {
   gap: 0.55rem;
 }
 
-.preparation-fieldset input[type="number"] {
+.preparation-fieldset select {
   width: 4rem;
   margin-left: auto;
+}
+
+.contextual-guidance,
+.outcome-summary,
+.travel-option-card {
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  background: var(--panel-strong);
+  padding: 0.75rem;
+}
+.contextual-guidance {
+  display: grid;
+  gap: 0.25rem;
+  border-left: 3px solid var(--gold);
+  margin-bottom: 0.85rem;
+}
+.route-evidence-explainer {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.travel-option-card {
+  display: grid;
+  gap: 0.55rem;
+}
+.travel-option-card h4,
+.outcome-summary h3 {
+  margin: 0;
+}
+.travel-projection,
+.summary-grid {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+.travel-projection div,
+.summary-grid div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.8fr) minmax(0, 1.2fr);
+  gap: 0.45rem;
+  border-bottom: 1px solid var(--line);
+}
+.travel-projection dt,
+.summary-grid dt {
+  color: var(--muted);
+}
+.travel-projection dd,
+.summary-grid dd {
+  margin: 0;
+}
+.route-evidence-grid {
+  display: grid;
+  gap: 0.4rem;
+}
+.route-evidence-category {
+  border-left: 3px solid var(--line);
+  padding-left: 0.55rem;
+  font-size: 0.82rem;
+}
+.route-evidence-category.unknown,
+.route-evidence-category.conflicting-values {
+  border-left-color: var(--warning);
+}
+.route-evidence-category ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+.outcome-summary {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.75rem 0 1rem;
+}
+.outcome-summary.failure {
+  border-left: 3px solid var(--danger);
+}
+.commission-action {
+  display: grid;
+  gap: 0.3rem;
 }
 
 .commission-match {

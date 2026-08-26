@@ -1,12 +1,17 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
+import { PROTOCOL_VERSION } from "@long-map/protocol";
+import { DEVELOPMENT_SCENARIO } from "@long-map/game-core";
 import { App } from "./App";
+import { EvidenceCategory } from "./components/MissionActionPanel";
 import {
   createLocalAuthority,
   LEGACY_LOCAL_RECORD_KEY,
   LEGACY_LOCAL_RECORD_KEY_V2,
+  LEGACY_LOCAL_RECORD_KEY_V3,
   LOCAL_RECORD_KEY,
+  LOCAL_RECORD_VERSION,
   type LocalAuthority,
   type StoragePort,
 } from "./authority";
@@ -30,6 +35,21 @@ const authorityFor = (storage: MemoryStorage): LocalAuthority => {
   const result = createLocalAuthority(storage);
   if (!result.ok) throw new Error(result.message);
   return result.authority;
+};
+
+const storageForSeed = (seed: number): MemoryStorage => {
+  const storage = new MemoryStorage();
+  storage.setItem(
+    LOCAL_RECORD_KEY,
+    JSON.stringify({
+      version: LOCAL_RECORD_VERSION,
+      protocolVersion: PROTOCOL_VERSION,
+      scenarioVersion: DEVELOPMENT_SCENARIO.version,
+      seed,
+      commands: [],
+    }),
+  );
+  return storage;
 };
 
 const chooseCommission = async (user: ReturnType<typeof userEvent.setup>): Promise<void> => {
@@ -69,7 +89,10 @@ describe("player-facing browser prototype", () => {
       true,
     );
     expect(screen.getAllByText("Reward: 3 Findings")).toHaveLength(2);
-    expect(screen.getByLabelText("Extra Provisions")).toHaveAttribute("max", "2");
+    expect(screen.getByLabelText("Extra Provisions")).toHaveDisplayValue("0");
+    expect(within(screen.getByLabelText("Extra Provisions")).getAllByRole("option")).toHaveLength(
+      3,
+    );
     expect(screen.getByText("4. Total cost: 0 Findings")).toBeInTheDocument();
     const startButton = screen.getByRole("button", { name: "Start Expedition" });
     expect(startButton).toBeDisabled();
@@ -90,13 +113,12 @@ describe("player-facing browser prototype", () => {
     authority.dispatch({ kind: "publish-reports", observationIds: [] });
     const user = userEvent.setup();
     render(<App storage={storage} />);
-    expect(screen.getByLabelText("Previous Commission result")).toHaveTextContent("Success");
-    expect(screen.getByLabelText("Previous Commission result")).toHaveTextContent(
-      "2 of 2 Findings granted",
+    expect(screen.getByLabelText("Previous Expedition Summary")).toHaveTextContent("Success");
+    expect(screen.getByLabelText("Previous Expedition Summary")).toHaveTextContent(
+      "2 of 2 Commission Findings granted",
     );
     await chooseCommission(user);
-    await user.clear(screen.getByLabelText("Extra Provisions"));
-    await user.type(screen.getByLabelText("Extra Provisions"), "1");
+    await user.selectOptions(screen.getByLabelText("Extra Provisions"), "1");
     expect(screen.getByText("4. Total cost: 1 Findings")).toBeInTheDocument();
     expect(screen.getByText("Findings remaining: 1")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Start Expedition" }));
@@ -104,18 +126,21 @@ describe("player-facing browser prototype", () => {
     expect(screen.getByLabelText("Active Commission")).toHaveTextContent("Progress: Active");
   });
 
-  it("leaves both v1 and v2 histories untouched until targeted confirmation", async () => {
+  it("leaves v1, v2, and v3 histories untouched until targeted confirmation", async () => {
     const storage = new MemoryStorage();
     storage.setItem(LEGACY_LOCAL_RECORD_KEY, "v1");
     storage.setItem(LEGACY_LOCAL_RECORD_KEY_V2, "v2");
+    storage.setItem(LEGACY_LOCAL_RECORD_KEY_V3, "v3");
     storage.setItem("unrelated", "keep");
     const user = userEvent.setup();
     render(<App storage={storage} confirmReset={() => true} />);
     expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY)).toBe("v1");
     expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY_V2)).toBe("v2");
+    expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY_V3)).toBe("v3");
     await user.click(screen.getByRole("button", { name: "Reset local prototype" }));
     expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY)).toBeNull();
     expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY_V2)).toBeNull();
+    expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY_V3)).toBeNull();
     expect(storage.getItem("unrelated")).toBe("keep");
   });
   it("renders the title, six Reports, three instruments, safe map, and legitimately known hidden route", () => {
@@ -255,8 +280,7 @@ describe("player-facing browser prototype", () => {
     const user = userEvent.setup();
     render(<App storage={storage} />);
     await chooseCommission(user);
-    await user.clear(screen.getByLabelText("Extra Provisions"));
-    await user.type(screen.getByLabelText("Extra Provisions"), "1");
+    await user.selectOptions(screen.getByLabelText("Extra Provisions"), "1");
     await user.click(screen.getByRole("button", { name: "Start Expedition" }));
     await user.click(screen.getByRole("button", { name: "Travel toward Whisper Shoal" }));
     await user.click(
@@ -279,7 +303,7 @@ describe("player-facing browser prototype", () => {
     storage.failWrites = false;
     await user.click(screen.getByRole("button", { name: "Publish selected Reports" }));
     expect(screen.getByRole("button", { name: "Start Expedition" })).toBeDisabled();
-    expect(screen.getByLabelText("Extra Provisions")).toHaveValue(0);
+    expect(screen.getByLabelText("Extra Provisions")).toHaveValue("0");
     expect(screen.getAllByRole("radio").every((radio) => !radio.hasAttribute("checked"))).toBe(
       true,
     );
@@ -299,6 +323,13 @@ describe("player-facing browser prototype", () => {
     expect(screen.getByLabelText("Active Commission")).not.toHaveTextContent(
       "Safe return outstanding",
     );
+    expect(screen.getByLabelText("Return Summary")).toHaveTextContent(
+      "Lantern Harbor → Whisper Shoal",
+    );
+    expect(screen.getByLabelText("Return Summary")).toHaveTextContent(
+      "7 Provisions · 4 Vessel Integrity",
+    );
+    expect(screen.getByLabelText("Return Summary")).toHaveTextContent("1 recovered");
   });
 
   it("marks every matching Verify Report observation without selecting it and explains pending publication", async () => {
@@ -321,6 +352,21 @@ describe("player-facing browser prototype", () => {
     expect(screen.getAllByText("✓ Satisfies Verify Report Commission")).toHaveLength(1);
     expect(screen.getAllByRole("checkbox").every((box) => !(box as HTMLInputElement).checked)).toBe(
       true,
+    );
+    expect(screen.getByLabelText("Return Summary")).toHaveTextContent(
+      "3 Verify Findings remain pending",
+    );
+    await user.click(
+      within(screen.getByText("✓ Satisfies Verify Report Commission").closest("label")!).getByRole(
+        "checkbox",
+      ),
+    );
+    await user.click(screen.getByRole("button", { name: "Publish selected Reports" }));
+    expect(screen.getByLabelText("Previous Expedition Summary")).toHaveTextContent(
+      "3 of 3 Commission Findings granted",
+    );
+    expect(screen.getByLabelText("Previous Expedition Summary")).toHaveTextContent(
+      "1 Reports published · +1 contribution",
     );
   });
 
@@ -513,5 +559,138 @@ describe("player-facing browser prototype", () => {
     const rendered = document.body.textContent ?? "";
     expect(rendered).not.toContain("Last Cairn");
     expect(rendered).not.toContain("r-ol");
+  });
+
+  it("shows keyboard-operable route cards with explicit Unknown evidence and projected consequences", async () => {
+    const user = userEvent.setup();
+    render(<App storage={new MemoryStorage()} />);
+    await chooseCommission(user);
+    await user.click(screen.getByRole("button", { name: "Start Expedition" }));
+    const shoal = screen.getByRole("article", { name: "Route decision to Whisper Shoal" });
+    expect(shoal).toHaveTextContent("Travel cost1 Provision");
+    expect(shoal).toHaveTextContent("Projected Provisions7");
+    expect(shoal).toHaveTextContent("Known Return Reserve1");
+    expect(shoal).toHaveTextContent("Projected margin6");
+    expect(shoal).toHaveTextContent("Route status: Reported");
+    expect(shoal).toHaveTextContent("Hazard: Unknown");
+    expect(shoal).toHaveTextContent("Condition: Unknown");
+    expect(
+      screen.getByText(/projected margins are before unknown travel damage/i),
+    ).toBeInTheDocument();
+    const details = within(shoal).getByText("1 historical claim");
+    expect(details).toBeInTheDocument();
+    const travel = within(shoal).getByRole("button", { name: "Travel toward Whisper Shoal" });
+    travel.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("heading", { name: "At Whisper Shoal" })).toBeInTheDocument();
+  });
+
+  it("renders conflicting route evidence with a non-color warning and every historical claim", () => {
+    render(
+      <EvidenceCategory
+        label="Hazard"
+        evidence={{
+          state: "conflicting-values",
+          claims: [
+            {
+              reportId: "report-safe",
+              category: "hazard",
+              reportedValue: "calm",
+              age: 0,
+              quality: "high",
+              sourceClass: "player",
+              independentCorroboration: 1,
+              potentiallyStale: false,
+              observedRevision: 2,
+            },
+            {
+              reportId: "report-danger",
+              category: "hazard",
+              reportedValue: "dangerous",
+              age: 1,
+              quality: "low",
+              sourceClass: "player",
+              independentCorroboration: 1,
+              potentiallyStale: true,
+              observedRevision: 1,
+            },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText("Hazard: ⚠ Conflicting Reports")).toBeInTheDocument();
+    expect(screen.getByText("2 historical claims")).toBeInTheDocument();
+  });
+
+  it("marks Commission-target routes and required Observation actions without hiding alternatives", async () => {
+    const user = userEvent.setup();
+    render(<App storage={new MemoryStorage()} />);
+    await chooseCommission(user);
+    await user.click(screen.getByRole("button", { name: "Start Expedition" }));
+    const target = screen.getByRole("article", { name: "Route decision to Whisper Shoal" });
+    expect(target).toHaveTextContent("Commission target · Advances current Commission");
+    expect(
+      screen.getByRole("article", { name: "Route decision to Glass Cay" }),
+    ).toBeInTheDocument();
+    await user.click(within(target).getByRole("button", { name: "Travel toward Whisper Shoal" }));
+    expect(screen.getAllByRole("button", { name: /Observe/ }).length).toBeGreaterThan(0);
+  });
+
+  it("explains a safely returned incomplete objective without saying return is outstanding", async () => {
+    const storage = new MemoryStorage();
+    const authority = authorityFor(storage);
+    startAndTravel(authority);
+    authority.dispatch({ kind: "travel", routeId: "r-hs" });
+    authority.dispatch({ kind: "resolve-return" });
+    render(<App storage={storage} />);
+    const commission = screen.getByLabelText("Active Commission");
+    expect(commission).toHaveTextContent("Safe return completed. Commission objective incomplete");
+    expect(commission).not.toHaveTextContent(/return (outstanding|still required)/i);
+    expect(screen.getByLabelText("Return Summary")).toHaveTextContent("Objective incomplete");
+  });
+
+  it("cleans up after automatic travel failure and presents an authoritative Failure Summary", async () => {
+    const user = userEvent.setup();
+    render(<App storage={storageForSeed(1)} />);
+    await chooseCommission(user);
+    await user.click(screen.getByRole("button", { name: "Start Expedition" }));
+    for (const destination of [
+      "Whisper Shoal",
+      "North Mark",
+      "Deep Spur",
+      "Needle Rock",
+      "Far Sound",
+      "Needle Rock",
+      "Deep Spur",
+    ])
+      await user.click(screen.getByRole("button", { name: `Travel toward ${destination}` }));
+    expect(screen.getByLabelText("Failure Summary")).toHaveTextContent(
+      "Failure reason: Vessel Integrity",
+    );
+    expect(screen.getByRole("button", { name: "Start Expedition" })).toBeDisabled();
+    expect(
+      screen.getAllByRole("radio").every((radio) => !(radio as HTMLInputElement).checked),
+    ).toBe(true);
+  });
+
+  it("cleans up after explicit stranded failure and requires a new Commission", async () => {
+    const user = userEvent.setup();
+    render(<App storage={new MemoryStorage()} />);
+    await chooseCommission(user);
+    await user.click(screen.getByRole("button", { name: "Start Expedition" }));
+    for (const destination of [
+      "Whisper Shoal",
+      "North Mark",
+      "Whisper Shoal",
+      "North Mark",
+      "Whisper Shoal",
+      "North Mark",
+      "Whisper Shoal",
+      "North Mark",
+    ])
+      await user.click(screen.getByRole("button", { name: `Travel toward ${destination}` }));
+    await user.click(screen.getByRole("button", { name: "Resolve stranded failure" }));
+    expect(screen.getByLabelText("Failure Summary")).toHaveTextContent("Failure reason: Stranded");
+    expect(screen.getByRole("button", { name: "Start Expedition" })).toBeDisabled();
   });
 });

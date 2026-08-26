@@ -19,6 +19,8 @@ These documents define the current project baseline. More specific decision reco
 
 - [PLAYTEST-0001: First Owner Browser Playtest](playtests/PLAYTEST-0001-owner.md) — direct player
   observations, project-lead diagnosis, resulting decisions, and questions for later testing.
+- [PLAYTEST-0002 Plan](playtests/PLAYTEST-0002-plan.md) — clean-start procedure, owner tasks,
+  comprehension questions, and Revision 0.2 evidence gate; no result has been recorded.
 
 ## Architecture and validation
 
@@ -41,7 +43,9 @@ These documents define the current project baseline. More specific decision reco
 - [ADR-0005: Revision 0.2 resource and return model](decisions/ADR-0005-revision-0.2-resource-and-return-model.md) —
   Provisions, Charges, Vessel Integrity, Return Reserve, salvage families, Findings, and replay versioning.
 - [ADR-0006: Commission and preparation loop](decisions/ADR-0006-commission-and-preparation-loop.md) —
-  deterministic Commission purpose, reward timing, temporary preparation, Atlas Contribution, and protocol-3 replay transition.
+  deterministic Commission purpose, reward timing, temporary preparation, and Atlas Contribution.
+- [ADR-0007: Route evidence and Expedition outcomes](decisions/ADR-0007-route-evidence-and-expedition-outcomes.md) —
+  authoritative travel options, conflicting historical claims, Expedition journals, outcome summaries, and protocol-4 transition.
 
 ## Decision labels
 

@@ -9,9 +9,9 @@ Build the smallest vertical slice that can disprove or support the player-author
 The [first owner browser playtest](../playtests/PLAYTEST-0001-owner.md) failed the comprehension,
 motivation, interface, and strategic-depth gates. The map and exploration premise remain a positive
 signal, but Phase 1 cannot be considered complete until the substantial
-[Revision 0.2 response](REVISION_0.2_PLAYTEST_RESPONSE.md) is implemented and validated. Revision 0.2
-is planned work; its Commission, resource, reward, salvage, route-evidence, shell, and summary systems
-do not yet exist merely because they are specified.
+[Revision 0.2 response](REVISION_0.2_PLAYTEST_RESPONSE.md) is implemented, technically validated,
+and tested by the owner. Its technical candidate now exists on the feature branch, but Phase 1
+remains open until PLAYTEST-0002 evidence is conducted and reviewed.
 
 ## Proof obligations
 

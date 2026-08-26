@@ -49,10 +49,10 @@ security.
 
 ## Scenario and provisional tuning
 
-Scenario `1.2.0` is an original compact archipelago with 12 nodes, 18 routes, one Waystation, two
+Scenario `1.3.0` is an original compact archipelago with 12 nodes, 18 routes, one Waystation, two
 hidden routes, route hazards and conditions, node opportunities, and six mixed-quality baseline
 Reports with initial ages 6, 4, 3, 2, 1, and 0 logical steps. One hidden route is known through a
-baseline route Report; the other remains unrevealed. Protocol 2 Expeditions choose two instruments,
+baseline route Report; the other remains unrevealed. Protocol 4 Expeditions choose two instruments,
 begin with 8 Provisions, 4 Vessel Integrity, and 2 Charges for each selected instrument. Travel costs
 1 Provision, Observation costs 1 matching Charge, and salvage costs 1 Provision before applying its
 typed result. A Trace contains at most half of eligible lost unbanked Findings.
@@ -91,7 +91,7 @@ logical times can corroborate the same unchanged revision; duplicate Reports fro
 claims from different values or revisions do not add evidence. Each Report retains its own timestamps
 and age.
 
-Protocol 3 adds deterministic public-knowledge Commission offers: verify prioritizes stale, weak,
+Protocol 4 retains deterministic public-knowledge Commission offers: verify prioritizes stale, weak,
 uncorroborated, old Reports; survey prioritizes missing or weak route evidence without duplicating
 verify; frontier uses known distance 2–3; salvage requires public opportunity evidence. Start
 atomically commits a Commission and optional preparation (up to +2 Provisions, +1 Integrity, and +1
@@ -103,6 +103,16 @@ Verification filters claims by both known subject topology and the observation c
 subject legally supports, including condition and hazard nodes. Offer planning excludes unbanked
 failed-Expedition Observations, so every failed-state offer remains valid when its replacement
 Expedition overwrites the prior one.
+
+Protocol 4 adds one safe travel-option contract shared by command legality, browsers, and bots. Each
+option contains projected Provisions, known-route reserve and margin, warning, destination/visited
+status, and deterministically ordered historical route, hazard, and condition claims with explicit
+Unknown and conflict states. Current hidden values and future damage never enter the projection.
+
+Canonical Expeditions journal starting resources, ordered safe route legs, damage, Observations,
+resolved salvage effects, Findings, preparation, and Commission progress. One authoritative latest
+outcome summary is current during return/failure and previous after publication or a later start.
+Publication finalizes exact Report IDs and Atlas Contribution; failure finalizes loss and Trace facts.
 
 All names, rewards, costs, hazard thresholds, and instrument mappings are tuning parameters.
 
@@ -136,7 +146,9 @@ The study validates deterministic infrastructure only. It is not a balance concl
 Ending resource metrics retain the last active Expedition snapshot: successful runs use the state
 immediately after return and before publication clears the Expedition, failures use the failed state,
 and timeouts use the latest active state. A run that never starts reports null; aggregate ending
-resource averages exclude null runs.
+resource averages exclude null runs. Protocol-4 metrics also count unknown-hazard choices,
+conflicting-evidence choices, minimum projected margin, Commission-relevant travel, and summary
+outcomes.
 
 ## Validation
 

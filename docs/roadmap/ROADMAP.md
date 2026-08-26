@@ -22,9 +22,9 @@ This evidence-gated roadmap makes no calendar promises. Each phase can pause, na
 
 **Current evidence:** the deterministic core and first browser prototype exist, but the first owner
 browser playtest failed comprehension, motivation, interface coherence, and strategic-depth gates.
-Phase 1 remains open pending implementation and validation of the
-[Revision 0.2 playtest response](../design/REVISION_0.2_PLAYTEST_RESPONSE.md), followed by a second
-owner playtest.
+The Revision 0.2 technical candidate now implements its resource, purpose, route-evidence, guidance,
+and outcome-summary response. Phase 1 remains open pending complete validation and the planned
+[second owner playtest](../playtests/PLAYTEST-0002-plan.md), whose evidence has not yet been recorded.
 
 **Pause/revise if:** uncertainty is unintelligible, choices collapse, replay cannot remain deterministic, or scope exceeds a small slice.
 

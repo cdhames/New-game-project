@@ -15,12 +15,11 @@ do not yet satisfy Phase 1.
 All numeric values in this document are reversible initial tuning parameters, not permanent design
 law.
 
-**Implementation status:** The Stage 1 shell plus the Revision 0.2 resource, Commission, and
-preparation foundation are implemented. This includes Provisions, Vessel Integrity, variable
-per-instrument Charges, Return Reserve, typed salvage, Findings, four deterministic Commission
-families, progress/rewards, temporary preparation, Atlas Contribution, a concise previous result,
-safe action reasons, and versioned replay. The final route-evidence presentation and comprehensive
-Expedition completion summary remain planned.
+**Implementation status:** The Revision 0.2 technical candidate is implemented on the feature branch:
+the shell, resources, Commissions, preparation, player-safe route evidence and projected return
+consequences, contextual guidance, authoritative Expedition journal, and return/failure/finalized
+outcome summaries. Automated and browser validation must pass before this status is considered final.
+The second owner playtest has not occurred, and Phase 1 remains open until its evidence is reviewed.
 
 ## 1. Desktop information architecture
 
@@ -221,9 +220,9 @@ No stage below is implemented by this document.
 | 2 | Implemented on this branch | Revised player-safe projection fields and player-facing resource terminology | Protocol and game core, then browser rendering |
 | 3 | Implemented on this branch | Commission generation/progress/completion and Findings earning/banking | Protocol and game core, then browser controls and presentation |
 | 4 | Implemented on this branch | Return Reserve, base Provisions, instrument Charges, salvage cost, Vessel Integrity, restoration and warnings | Protocol and game core for rules/projection; browser for explanation and warnings |
-| 5 | Planned | Player-safe route-evidence projection and decision-time presentation | Protocol/game core filtering; browser presentation |
-| 6 | Partially implemented | Temporary preparation and concise previous-Commission result; comprehensive Expedition summary remains planned | Protocol/game core for outcomes and purchases; browser summary and preparation UI |
-| 7 | Planned | Unit, property, replay, simulation, browser, responsive and accessibility validation; second owner playtest | All affected packages and browser; documentation for evidence |
+| 5 | Implemented on this branch | Player-safe route-evidence projection and decision-time presentation | Protocol/game core filtering; browser presentation |
+| 6 | Implemented on this branch | Temporary preparation and comprehensive Expedition summaries | Protocol/game core for outcomes and purchases; browser summary and preparation UI |
+| 7 | Candidate validation in progress | Unit, property, replay, simulation, browser, responsive and accessibility validation; second owner playtest remains pending | All affected packages and browser; documentation for evidence |
 
 Stages that change commands, events, canonical state, deterministic rules, resource accounting,
 Commission state, reward state, or safe projections require protocol/game-core work and replay

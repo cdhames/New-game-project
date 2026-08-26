@@ -1,5 +1,13 @@
 import { type FormEvent } from "react";
-import type { CommissionOffer, Instrument, ObservationRecord, StableId } from "@long-map/protocol";
+import type {
+  CommissionOffer,
+  ExpeditionOutcomeSummary,
+  Instrument,
+  ObservationRecord,
+  RouteEvidenceCategory,
+  SafeTravelOption,
+  StableId,
+} from "@long-map/protocol";
 import {
   categoryName,
   displayName,
@@ -19,6 +27,7 @@ export function MissionActionPanel(props: MissionControlProps): React.JSX.Elemen
       data-testid="mission-action-panel"
     >
       <div className="panel-scroll">
+        <ContextualGuidance projection={props.projection} />
         <PhaseControls {...props} />
       </div>
     </section>
@@ -83,29 +92,11 @@ function SetupControls(props: MissionControlProps): React.JSX.Element {
       <h2 id="control-title">
         {projection.phase === "failed" ? "Chart the next attempt" : "Prepare a local Expedition"}
       </h2>
-      {projection.phase === "failed" ? (
-        <div className="failure-note" role="status">
-          <strong>Previous Expedition failed.</strong> Unbanked Findings were lost; any visible
-          Trace is in the Logbook. Banked Findings remain {projection.waystation.bankedFindings}.
-        </div>
+      {projection.phase === "failed" && projection.currentExpeditionSummary ? (
+        <OutcomeSummary summary={projection.currentExpeditionSummary} kind="failure" />
       ) : null}
       {projection.previousExpeditionSummary ? (
-        <article className="commission-result-card" aria-label="Previous Commission result">
-          <strong>
-            Previous Commission: {humanize(projection.previousExpeditionSummary.commissionResult)}
-          </strong>
-          <span>
-            {projection.previousExpeditionSummary.commissionFindingsGranted} of{" "}
-            {projection.previousExpeditionSummary.commissionFindingsOffered} Findings granted
-          </span>
-          <span>
-            Preparation spent: {projection.previousExpeditionSummary.preparationFindingsSpent}
-          </span>
-          <span>
-            Banked Findings: {projection.waystation.bankedFindings} · Atlas Contribution:{" "}
-            {projection.waystation.atlasContribution}
-          </span>
-        </article>
+        <OutcomeSummary summary={projection.previousExpeditionSummary} kind="previous" />
       ) : null}
       <section aria-labelledby="commission-choice-title">
         <h3 id="commission-choice-title">1. Choose a Commission</h3>
@@ -166,11 +157,8 @@ function SetupControls(props: MissionControlProps): React.JSX.Element {
         <label>
           Extra Provisions (0–{catalog.maximumExtraProvisions}, {catalog.extraProvisionCost} Finding
           each)
-          <input
+          <select
             aria-label="Extra Provisions"
-            type="number"
-            min="0"
-            max={catalog.maximumExtraProvisions}
             value={props.preparation.extraProvisions}
             onChange={(event) =>
               props.setPreparation({
@@ -178,7 +166,13 @@ function SetupControls(props: MissionControlProps): React.JSX.Element {
                 extraProvisions: Number(event.target.value),
               })
             }
-          />
+          >
+            {[0, 1, 2].map((value) => (
+              <option value={value} key={value}>
+                {value}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           <input
@@ -296,34 +290,47 @@ function ExpeditionControls(props: MissionControlProps): React.JSX.Element {
       </p>
       <ActionGroup title="Travel">
         {routes.length ? (
-          routes.map((route) => {
-            return (
-              <button
+          <>
+            <p className="route-evidence-explainer">
+              Reports are historical claims and can conflict. Unknown does not mean safe. Return
+              Reserve uses known topology only; projected margins are before unknown travel damage.
+            </p>
+            {routes.map((route) => (
+              <TravelOptionCard
                 key={route.routeId}
-                type="button"
+                option={route}
+                commission={projection.activeCommission?.offer ?? null}
                 disabled={props.disabled}
-                onClick={() => props.dispatch({ kind: "travel", routeId: route.routeId })}
-              >
-                Travel toward {displayName(route.destinationNodeId)}
-              </button>
-            );
-          })
+                travel={() => props.dispatch({ kind: "travel", routeId: route.routeId })}
+              />
+            ))}
+          </>
         ) : (
           <Unavailable>{availabilityText(projection.actions.availability.travel)}</Unavailable>
         )}
       </ActionGroup>
       <ActionGroup title="Observe">
         {projection.actions.observations.length ? (
-          projection.actions.observations.map((action) => (
-            <button
-              key={`${action.subjectId}-${action.category}`}
-              type="button"
-              disabled={props.disabled}
-              onClick={() => props.dispatch({ kind: "observe", ...action })}
-            >
-              Observe {categoryName(action.category)} at {displayName(action.subjectId)}
-            </button>
-          ))
+          projection.actions.observations.map((action) => {
+            const commission = projection.activeCommission?.offer;
+            const required =
+              commission &&
+              (commission.family === "survey" || commission.family === "verify-report") &&
+              commission.subjectId === action.subjectId &&
+              commission.category === action.category;
+            return (
+              <div className="commission-action" key={`${action.subjectId}-${action.category}`}>
+                {required ? <strong>◎ Required Commission Observation</strong> : null}
+                <button
+                  type="button"
+                  disabled={props.disabled}
+                  onClick={() => props.dispatch({ kind: "observe", ...action })}
+                >
+                  Observe {categoryName(action.category)} at {displayName(action.subjectId)}
+                </button>
+              </div>
+            );
+          })
         ) : (
           <Unavailable>{availabilityText(projection.actions.availability.observe)}</Unavailable>
         )}
@@ -379,6 +386,245 @@ function ExpeditionControls(props: MissionControlProps): React.JSX.Element {
         </section>
       ) : null}
     </>
+  );
+}
+
+function ContextualGuidance({
+  projection,
+}: {
+  projection: MissionControlProps["projection"];
+}): React.JSX.Element {
+  let message =
+    "Choose a Commission, then choose its required instruments. Preparation becomes useful after earning Findings.";
+  if (projection.phase === "expedition") {
+    message =
+      projection.activeCommission?.progress.status === "objective-met"
+        ? "Objective met: return to Lantern Harbor while the known route remains affordable. Vessel Integrity reaching zero still causes failure."
+        : projection.visitedNodeIds.length <= 1
+          ? "Inspect the historical Reports beside each route, then choose where to leave Lantern Harbor."
+          : "Pursue the Commission, preserve the known Return Reserve, and remember that zero Vessel Integrity causes failure.";
+  }
+  if (projection.phase === "returned")
+    message =
+      projection.activeCommission?.offer.family === "verify-report"
+        ? "Publish the marked Observation to earn the Verify Report reward."
+        : "Publication improves the Atlas but is not required for this Commission reward.";
+  if (projection.phase === "failed")
+    message =
+      "Review what was lost, then choose a new Commission and loadout for the next attempt.";
+  return (
+    <aside className="contextual-guidance" aria-label="Current guidance">
+      <strong>Next step</strong>
+      <span>{message}</span>
+    </aside>
+  );
+}
+
+export function EvidenceCategory({
+  label,
+  evidence,
+}: {
+  label: string;
+  evidence: RouteEvidenceCategory;
+}): React.JSX.Element {
+  const stateText =
+    evidence.state === "unknown"
+      ? "Unknown"
+      : evidence.state === "conflicting-values"
+        ? "⚠ Conflicting Reports"
+        : "Reported";
+  return (
+    <div className={`route-evidence-category ${evidence.state}`}>
+      <strong>
+        {label}: {stateText}
+      </strong>
+      {evidence.claims.length ? (
+        <details>
+          <summary>
+            {evidence.claims.length} historical claim{evidence.claims.length === 1 ? "" : "s"}
+          </summary>
+          <ul>
+            {evidence.claims.map((claim) => (
+              <li key={claim.reportId}>
+                {readingLabel(claim.category, claim.reportedValue)} · age {claim.age} ·{" "}
+                {qualityLabel(claim.quality)} · corroboration {claim.independentCorroboration} ·
+                revision {claim.observedRevision}
+                {claim.potentiallyStale
+                  ? " · ⚠ potentially stale"
+                  : " · no later known Drift warning"}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+function TravelOptionCard({
+  option,
+  commission,
+  disabled,
+  travel,
+}: {
+  option: SafeTravelOption;
+  commission: CommissionOffer | null;
+  disabled: boolean;
+  travel: () => void;
+}): React.JSX.Element {
+  const commissionTarget =
+    commission &&
+    (commission.family === "reach-frontier" || commission.family === "recover-salvage") &&
+    commission.targetLocationId === option.destinationNodeId;
+  return (
+    <article
+      className="travel-option-card"
+      aria-label={`Route decision to ${displayName(option.destinationNodeId)}`}
+    >
+      <h4>{displayName(option.destinationNodeId)}</h4>
+      {commissionTarget ? (
+        <strong className="commission-match">
+          ◎ Commission target · Advances current Commission
+        </strong>
+      ) : null}
+      <p>{option.destinationVisited ? "Previously visited" : "New destination"}</p>
+      <dl className="travel-projection">
+        <div>
+          <dt>Travel cost</dt>
+          <dd>{option.provisionCost} Provision</dd>
+        </div>
+        <div>
+          <dt>Projected Provisions</dt>
+          <dd>{option.projectedProvisions}</dd>
+        </div>
+        <div>
+          <dt>Known Return Reserve</dt>
+          <dd>{option.projectedReturnReserve ?? "Unknown"}</dd>
+        </div>
+        <div>
+          <dt>Projected margin</dt>
+          <dd>{option.projectedProvisionMargin ?? "Unknown"}</dd>
+        </div>
+        <div>
+          <dt>Warning</dt>
+          <dd>{humanize(option.projectedReturnReserveWarning)}</dd>
+        </div>
+      </dl>
+      <div className="route-evidence-grid">
+        <EvidenceCategory label="Route status" evidence={option.evidence.route} />
+        <EvidenceCategory label="Hazard" evidence={option.evidence.hazard} />
+        <EvidenceCategory label="Condition" evidence={option.evidence.condition} />
+      </div>
+      <button type="button" disabled={disabled} onClick={travel}>
+        Travel toward {displayName(option.destinationNodeId)}
+      </button>
+    </article>
+  );
+}
+
+function OutcomeSummary({
+  summary,
+  kind,
+}: {
+  summary: ExpeditionOutcomeSummary;
+  kind: "return" | "failure" | "previous";
+}): React.JSX.Element {
+  const title =
+    kind === "return"
+      ? "Return Summary"
+      : kind === "failure"
+        ? "Failure Summary"
+        : "Previous Expedition Summary";
+  return (
+    <article className={`outcome-summary ${kind}`} aria-label={title}>
+      <h3>{title}</h3>
+      <p>
+        <strong>
+          {humanize(summary.commissionResult)} {humanize(summary.family)} Commission.
+        </strong>{" "}
+        Objective {summary.commissionObjectiveMet ? "met" : "incomplete"};{" "}
+        {summary.commissionFindingsGranted} of {summary.commissionFindingsOffered} Commission
+        Findings granted.
+      </p>
+      {summary.failureReason ? (
+        <p>
+          Failure reason: {humanize(summary.failureReason)}. Previously banked Findings remain{" "}
+          {summary.bankedFindingsAfter}.
+        </p>
+      ) : null}
+      <dl className="summary-grid">
+        <div>
+          <dt>Route traveled</dt>
+          <dd>
+            {summary.routeLegs.length
+              ? summary.routeLegs
+                  .map(
+                    (leg) =>
+                      `${displayName(leg.originNodeId)} → ${displayName(leg.destinationNodeId)}${leg.damageSustained ? " (damage)" : ""}`,
+                  )
+                  .join(" · ")
+              : "No legs"}
+          </dd>
+        </div>
+        <div>
+          <dt>Damage sustained</dt>
+          <dd>{summary.totalDamageSustained}</dd>
+        </div>
+        <div>
+          <dt>Ending resources</dt>
+          <dd>
+            {summary.endingResources.provisions} Provisions ·{" "}
+            {summary.endingResources.vesselIntegrity} Vessel Integrity
+          </dd>
+        </div>
+        <div>
+          <dt>Observations</dt>
+          <dd>
+            {summary.observationIds.length} made · {summary.retainedObservationIds.length} retained
+            · {summary.lostObservationIds.length} lost
+          </dd>
+        </div>
+        <div>
+          <dt>Salvage</dt>
+          <dd>
+            {summary.salvageOutcomes.length} recovered · {summary.findingsRecoveredFromSalvage}{" "}
+            Findings
+          </dd>
+        </div>
+        <div>
+          <dt>Findings</dt>
+          <dd>
+            {summary.findingsBankedOnReturn} banked on return · {summary.findingsLostOnFailure} lost
+            · {summary.preparationFindingsSpent} spent preparing
+          </dd>
+        </div>
+        <div>
+          <dt>Atlas</dt>
+          <dd>
+            {summary.publishedReportIds.length} Reports published · +
+            {summary.atlasContributionAdded} contribution
+          </dd>
+        </div>
+        <div>
+          <dt>Trace</dt>
+          <dd>{summary.traceId ?? "None"}</dd>
+        </div>
+      </dl>
+      {kind === "return" ? (
+        <p>
+          Atlas contribution awaits the current publication selection.{" "}
+          {summary.publicationRequired && !summary.requiredPublicationOccurred
+            ? `${summary.commissionFindingsOffered - summary.commissionFindingsGranted} Verify Findings remain pending.`
+            : "Commission publication is optional."}
+        </p>
+      ) : null}
+      {kind === "previous" ? (
+        <p>
+          Banked Findings now available: {summary.bankedFindingsAfter}. Preparation can change the
+          next Expedition within the listed caps.
+        </p>
+      ) : null}
+    </article>
   );
 }
 
@@ -439,6 +685,9 @@ function PublicationControls(props: MissionControlProps): React.JSX.Element {
       <p className="eyebrow">Successful return</p>
       <h2 id="control-title">Choose Reports for the Atlas</h2>
       <ActiveCommissionCard projection={props.projection} />
+      {props.projection.currentExpeditionSummary ? (
+        <OutcomeSummary summary={props.projection.currentExpeditionSummary} kind="return" />
+      ) : null}
       <p>Publish zero to three eligible Observations; unpublished evidence stays personal.</p>
       <p className="selection-count" aria-live="polite">
         {props.selectedReports.length} of 3 publication slots selected
@@ -519,6 +768,10 @@ function ActiveCommissionCard({
   const verifyPendingPublication =
     returned && active.offer.publicationRequired && active.progress.status === "objective-met";
   const completedOnReturn = returned && active.progress.status === "completed";
+  const incompleteOnReturn =
+    returned &&
+    active.progress.status !== "completed" &&
+    active.progress.status !== "objective-met";
   return (
     <article className="active-commission-card" aria-label="Active Commission">
       <CommissionDescription offer={active.offer} />
@@ -538,9 +791,15 @@ function ActiveCommissionCard({
         <span>
           Safe return completed. Commission completed; reward granted. Publication optional.
         </span>
+      ) : incompleteOnReturn ? (
+        <span>
+          Safe return completed. Commission objective incomplete; no Commission reward granted.
+          Publication remains available for the Atlas but cannot retroactively complete this
+          objective.
+        </span>
       ) : (
         <span>
-          Safe return outstanding
+          Safe return still required
           {active.offer.publicationRequired ? "; matching publication also required" : ""}.
         </span>
       )}

@@ -11,7 +11,7 @@ and the one-currency Findings economy.
 
 ## Decision
 
-Protocol 3 and scenario 1.2.0 generate three or four stable Commission offers from public Atlas
+Protocol 4 and scenario 1.3.0 generate three or four stable Commission offers from public Atlas
 claims and known topology only. The four typed families are verify-report, survey, reach-frontier,
 and recover-salvage. Verify ranks stale, lower-quality, less-corroborated, older Reports first. Survey
 ranks missing then stale/weak evidence and does not duplicate verify. Frontier uses known shortest
@@ -34,9 +34,9 @@ instruments, and a plan. One Finding buys each of up to two extra starting Provi
 buy +1 starting/maximum Vessel Integrity; one Finding buys +1 starting/maximum Charge for each
 selected instrument. The core validates caps, compatibility, uniqueness, and funds before deduction.
 
-Each published player Report adds one non-spendable Atlas Contribution. A bounded structured
-previous-Commission result survives Expedition clearing. Browser record v3 uses a new key and stores
-protocol/scenario versions; v1/v2 records are never replayed and remain untouched until targeted
+Each published player Report adds one non-spendable Atlas Contribution. The comprehensive latest
+Expedition summary survives Expedition clearing. Browser record v4 stores protocol/scenario
+versions; v1–v3 records are never replayed and remain untouched until targeted
 confirmed reset.
 
 Browser-only Commission, preparation, and publication selections clear only after an accepted,
@@ -61,5 +61,5 @@ Commission rewards may overpower voluntary exploration, or publication incentive
 
 Revise after deterministic simulation or human playtesting if offers become repetitive, unsafe
 targets appear, reward timing is unclear, preparation trivializes return pressure, or players still
-lack a credible second-Expedition motivation. The final decision-time route-evidence presentation and
-comprehensive Expedition completion summary remain planned outside this record.
+lack a credible second-Expedition motivation. ADR-0007 defines the implemented decision-time route
+evidence and comprehensive Expedition-outcome contracts.
