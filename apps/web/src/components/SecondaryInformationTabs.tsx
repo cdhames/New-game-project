@@ -242,8 +242,8 @@ function LogbookTab({
           <h3>Visible Traces</h3>
           {traces.map((trace) => (
             <p key={trace.id}>
-              Trace at {displayName(trace.associationId)} · {trace.recoverableReward} recoverable
-              reward · {trace.observationIds.length} retained Observation references
+              Trace at {displayName(trace.associationId)} · {trace.recoverableFindings} recoverable
+              Findings · {trace.observationIds.length} retained Observation references
             </p>
           ))}
         </div>

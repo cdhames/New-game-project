@@ -15,12 +15,11 @@ do not yet satisfy Phase 1.
 All numeric values in this document are reversible initial tuning parameters, not permanent design
 law.
 
-**Implementation status:** Stage 1 application-shell work is implemented on
-`feature/phase1-browser-prototype`. It provides the single-screen desktop shell, bounded panel
-scrolling, stable active-Expedition action categories, mission-panel Travel controls, accessible
-secondary tabs, and intentional mobile order. Stages 2–7 remain planned. In particular,
-Commissions, the Provisions/Charges redesign, Return Reserve, Findings, preparation spending,
-route-evidence redesign, and completion summaries are not implemented.
+**Implementation status:** The Stage 1 shell and the Revision 0.2 resource/planning foundation are
+implemented. This includes Provisions, Vessel Integrity, per-instrument Charges, Return Reserve,
+typed salvage families, Findings, safe action-availability reasons, and versioned deterministic
+replay. Commissions, preparation spending, Atlas Contribution, the final route-evidence
+presentation, and the final completion summary remain planned.
 
 ## 1. Desktop information architecture
 

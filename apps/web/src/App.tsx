@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Instrument, StableId } from "@long-map/protocol";
 import {
   createLocalAuthority,
+  LEGACY_LOCAL_RECORD_KEY,
   LOCAL_RECORD_KEY,
   type AuthorityLoadResult,
   type StoragePort,
@@ -58,6 +59,7 @@ export function App({
     if (!confirmReset("Clear only The Long Map local prototype history and create a fresh world?"))
       return;
     storage.removeItem(LOCAL_RECORD_KEY);
+    storage.removeItem(LEGACY_LOCAL_RECORD_KEY);
     setSelectedReports([]);
     setSelectedInstruments(["sounding-line", "weather-glass"]);
     setLoadResult(createLocalAuthority(storage));

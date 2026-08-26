@@ -406,6 +406,19 @@ h3 {
 .resource-row strong {
   color: var(--ink);
 }
+.reserve-warning {
+  border-left: 3px solid var(--gold);
+  padding: 0.65rem 0.75rem;
+  background: rgba(215, 184, 111, 0.08);
+  color: var(--muted);
+}
+.reserve-warning.at-reserve,
+.reserve-warning.below-reserve {
+  border-left-color: var(--warning);
+  color: var(--ink);
+  font-weight: 700;
+  background: rgba(244, 182, 138, 0.12);
+}
 .action-group {
   margin: 1.3rem 0;
 }
@@ -716,7 +729,7 @@ h3 {
   min-width: 0;
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(6, minmax(5.5rem, 1fr));
+  grid-template-columns: repeat(8, minmax(5.2rem, 1fr));
   gap: 0.45rem;
 }
 .status-metrics div {

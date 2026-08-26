@@ -229,7 +229,12 @@ function chooseCommand(
         !observed.has(`${item.subjectId}:${item.category}`) &&
         item.category !== "opportunity",
     );
-    if (survey && resources && (resources.provisionMargin ?? -1) >= 1 && resources.vesselIntegrity > 1)
+    if (
+      survey &&
+      resources &&
+      (resources.provisionMargin ?? -1) >= 1 &&
+      resources.vesselIntegrity > 1
+    )
       return survey;
     if (resolveReturn) return resolveReturn;
     if (resources && ((resources.provisionMargin ?? -1) <= 0 || resources.vesselIntegrity <= 1))

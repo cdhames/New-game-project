@@ -2,6 +2,7 @@ import type { PlayerSafeProjection } from "@long-map/protocol";
 import { displayName, humanize } from "../presentation";
 
 export function StatusBar({ projection }: { projection: PlayerSafeProjection }): React.JSX.Element {
+  const resources = projection.expeditionResources;
   return (
     <header className="status-bar" data-testid="status-bar">
       <div className="brand-block">
@@ -20,17 +21,44 @@ export function StatusBar({ projection }: { projection: PlayerSafeProjection }):
           <dd>{displayName(projection.locationId)}</dd>
         </div>
         <div>
-          <dt>Supply</dt>
-          <dd>{projection.supply}</dd>
+          <dt>Provisions</dt>
+          <dd>
+            {resources
+              ? `${resources.provisions} / ${resources.maximumProvisions}`
+              : `${projection.waystation.baseProvisions} base`}
+          </dd>
         </div>
         <div>
           <dt>Vessel Integrity</dt>
-          <dd>{projection.integrity}</dd>
+          <dd>
+            {resources
+              ? `${resources.vesselIntegrity} / ${resources.maximumVesselIntegrity}`
+              : `${projection.waystation.baseVesselIntegrity} base`}
+          </dd>
         </div>
         <div>
-          <dt>Reward</dt>
+          <dt>Charges</dt>
           <dd>
-            {projection.bankedReward} banked · {projection.unbankedReward} unbanked
+            {resources
+              ? resources.instrumentCharges
+                  .map((item) => `${humanize(item.instrument)} ${item.remaining}/${item.maximum}`)
+                  .join(" · ")
+              : `${projection.waystation.baseChargesPerSelectedInstrument} per selected instrument`}
+          </dd>
+        </div>
+        <div>
+          <dt>Findings</dt>
+          <dd>
+            {projection.waystation.bankedFindings} banked
+            {resources ? ` · ${resources.unbankedFindings} unbanked` : ""}
+          </dd>
+        </div>
+        <div>
+          <dt>Return Reserve</dt>
+          <dd>
+            {resources
+              ? `${resources.returnReserve ?? "Unknown"} · ${humanize(resources.returnReserveWarning)}`
+              : "Available after departure"}
           </dd>
         </div>
         <div>

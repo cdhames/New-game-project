@@ -49,13 +49,18 @@ security.
 
 ## Scenario and provisional tuning
 
-Scenario `1.0.0` is an original compact archipelago with 12 nodes, 18 routes, one Waystation, two
+Scenario `1.1.0` is an original compact archipelago with 12 nodes, 18 routes, one Waystation, two
 hidden routes, route hazards and conditions, node opportunities, and six mixed-quality baseline
 Reports with initial ages 6, 4, 3, 2, 1, and 0 logical steps. One hidden route is known through a
-baseline route Report; the other remains unrevealed. Expeditions choose two of Sounding Line, Weather
-Glass, and Field Lens; begin with six supply
-and three integrity; spend supply on travel, Observation, and salvage; publish at most three valid
-Observations after returning; and can leave a Trace containing at most half of eligible lost reward.
+baseline route Report; the other remains unrevealed. Protocol 2 Expeditions choose two instruments,
+begin with 8 Provisions, 4 Vessel Integrity, and 2 Charges for each selected instrument. Travel costs
+1 Provision, Observation costs 1 matching Charge, and salvage costs 1 Provision before applying its
+typed result. A Trace contains at most half of eligible lost unbanked Findings.
+
+Return Reserve is a breadth-first shortest-path cost to Lantern Harbor over known route endpoints
+only. It is null when no known path exists and does not inspect hazards, conditions, or unrevealed
+routes. Provision margins map to comfortable (at least 2), caution (1), at-reserve (0), and
+below-reserve (negative); the Waystation and unknown route cases are explicit.
 
 Current route and node truth is a serializable part of canonical state. Travel, Observation, and
 salvage resolve against that mutable copy rather than module-level scenario data. The player-safe
@@ -87,18 +92,19 @@ All names, rewards, costs, hazard thresholds, and instrument mappings are tuning
 
 The smoke study runs 100 seeded Expeditions each for four simple infrastructure policies:
 
-- cautious uses conservative supply/integrity thresholds and known shortest paths back to the
+- cautious uses Return Reserve, Provision margin, Vessel Integrity, and known shortest paths back to the
   Waystation;
 - aggressive prefers unvisited destinations with greater known graph distance, avoids immediate
   backtracking when possible, and accepts greater failure risk;
 - random samples uniformly from currently legal commands using explicit seeded randomness;
 - surveyor prioritizes new legal route, hazard, and condition Observations, preserves a return margin,
-  and deliberately publishes eligible evidence.
+  uses Charges intentionally, and deliberately publishes eligible evidence.
 
 Policies consume only the safe projection and issue commands validated by `PlayerCommandSchema`.
 They are deterministic test heuristics, not models of human behavior. Output includes full-loop
 completion, failure and timeout rates, rejected-command totals, decision steps, frontier depth, banked
-reward, Observations, Reports, and terminal checksum summaries. A command unexpectedly rejected from
+Findings, terminal Provisions and Vessel Integrity, unbanked Findings, Charges consumed,
+salvage-family outcomes, Return Reserve warnings, Observations, Reports, and checksum summaries. A command unexpectedly rejected from
 an advertised affordance raises a structured invariant error with policy, seed, step, command, reason,
 state checksum, and replay context. Reaching the step limit is explicitly classified as a timeout.
 Contradictory return and failure affordances are rejected as a structured simulation invariant before

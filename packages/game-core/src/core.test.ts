@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import {
   PROTOCOL_VERSION,
+  PlayerCommandSchema,
   type DomainEvent,
   type ObservationRecord,
   type PlayerCommand,
@@ -77,6 +78,11 @@ const returnedState = (observations: ObservationRecord[]): CanonicalState => {
 };
 
 describe("deterministic expedition core", () => {
+  it("accepts protocol 2 commands and rejects protocol 1 commands", () => {
+    expect(PlayerCommandSchema.safeParse(start()).success).toBe(true);
+    expect(PlayerCommandSchema.safeParse({ ...start(), protocolVersion: 1 }).success).toBe(false);
+    expect(createInitialState(1)).toMatchObject({ protocolVersion: 2, scenarioVersion: "1.1.0" });
+  });
   it("starts with the Revision 0.2 loadout and spends Charges rather than Provisions", () => {
     const begun = applyCommand(createInitialState(1), start());
     expect(begun.ok).toBe(true);
@@ -142,7 +148,9 @@ describe("deterministic expedition core", () => {
     expect(calculateReturnReserve(state, "harbor")).toBe(0);
     expect(calculateReturnReserve(state, "shoal")).toBe(1);
     expect(calculateReturnReserve(state, "north-mark")).toBe(2);
-    expect(createPlayerProjection(state).knownRoutes.some((route) => route.id === "r-ol")).toBe(false);
+    expect(createPlayerProjection(state).knownRoutes.some((route) => route.id === "r-ol")).toBe(
+      false,
+    );
     const isolated = structuredClone(state);
     isolated.world.routes = isolated.world.routes.map((route) =>
       route.id === "r-hs" || route.id === "r-hg" ? { ...route, hidden: true } : route,
@@ -165,7 +173,9 @@ describe("deterministic expedition core", () => {
       candidate.expedition!.locationId = "north-mark";
       candidate.expedition!.travelCount = 2;
       candidate.expedition!.provisions = provisions;
-      expect(candidate.expedition && createPlayerProjection(candidate).expeditionResources).toMatchObject({
+      expect(
+        candidate.expedition && createPlayerProjection(candidate).expeditionResources,
+      ).toMatchObject({
         returnReserve: 2,
         provisionMargin: provisions - 2,
         returnReserveWarning: warning,
@@ -203,9 +213,9 @@ describe("deterministic expedition core", () => {
         opportunityId: "shoal",
       }),
     ).toMatchObject({ ok: false, reason: "opportunity-unavailable" });
-    expect(createPlayerProjection(shoal.state).actions.salvageableOpportunities[0]).not.toHaveProperty(
-      "value",
-    );
+    expect(
+      createPlayerProjection(shoal.state).actions.salvageableOpportunities[0],
+    ).not.toHaveProperty("value");
   });
 
   it("produces byte-identical results and replays ordered events", () => {
@@ -391,6 +401,7 @@ describe("deterministic expedition core", () => {
     expect(resolved.ok).toBe(true);
     if (!resolved.ok) return;
     expect(resolved.state.bankedFindings).toBe(4);
+    expect(resolved.state.expedition?.unbankedFindings).toBe(0);
     expect(resolved.state.personalObservations).toContainEqual(
       observation("zero-supply-observation"),
     );

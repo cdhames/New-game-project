@@ -2,6 +2,7 @@ import {
   applyCommand,
   createInitialState,
   createPlayerProjection,
+  DEVELOPMENT_SCENARIO,
   type CanonicalState,
 } from "@long-map/game-core";
 import {
@@ -16,12 +17,15 @@ import {
 } from "@long-map/protocol";
 import { displayName } from "./presentation";
 
-export const LOCAL_RECORD_KEY = "the-long-map.local-prototype.v1";
-export const LOCAL_RECORD_VERSION = 1 as const;
+export const LEGACY_LOCAL_RECORD_KEY = "the-long-map.local-prototype.v1";
+export const LOCAL_RECORD_KEY = "the-long-map.local-prototype.v2";
+export const LOCAL_RECORD_VERSION = 2 as const;
 export const DEFAULT_DEVELOPMENT_SEED = 20_260_804;
 
 export interface LocalRecord {
   version: typeof LOCAL_RECORD_VERSION;
+  protocolVersion: typeof PROTOCOL_VERSION;
+  scenarioVersion: typeof DEVELOPMENT_SCENARIO.version;
   seed: number;
   commands: PlayerCommand[];
 }
@@ -47,7 +51,7 @@ export type CommandIntent =
   | { kind: "observe"; subjectId: StableId; category: ObservationCategory }
   | { kind: "salvage"; opportunityId: StableId }
   | { kind: "resolve-return" }
-  | { kind: "resolve-failure"; reason: "stranded" | "integrity" }
+  | { kind: "resolve-failure"; reason: "stranded" | "vessel-integrity" }
   | { kind: "publish-reports"; observationIds: StableId[] }
   | { kind: "advance-drift" };
 
@@ -71,10 +75,18 @@ export type AuthorityLoadResult = LoadFailure | LoadSuccess;
 
 const isRecordShape = (
   value: unknown,
-): value is { version: unknown; seed: unknown; commands: unknown } =>
+): value is {
+  version: unknown;
+  protocolVersion: unknown;
+  scenarioVersion: unknown;
+  seed: unknown;
+  commands: unknown;
+} =>
   typeof value === "object" &&
   value !== null &&
   "version" in value &&
+  "protocolVersion" in value &&
+  "scenarioVersion" in value &&
   "seed" in value &&
   "commands" in value;
 
@@ -87,6 +99,11 @@ const validateRecord = (raw: string): LocalRecord => {
   }
   if (!isRecordShape(parsed) || parsed.version !== LOCAL_RECORD_VERSION)
     throw new Error("The saved local expedition record uses an incompatible version.");
+  if (
+    parsed.protocolVersion !== PROTOCOL_VERSION ||
+    parsed.scenarioVersion !== DEVELOPMENT_SCENARIO.version
+  )
+    throw new Error("The saved local expedition record uses incompatible deterministic rules.");
   if (!Number.isInteger(parsed.seed) || typeof parsed.seed !== "number" || parsed.seed < 0)
     throw new Error("The saved local expedition record has an invalid deterministic seed.");
   if (!Array.isArray(parsed.commands))
@@ -97,7 +114,13 @@ const validateRecord = (raw: string): LocalRecord => {
       throw new Error(`Saved command ${index + 1} is invalid for this prototype version.`);
     return result.data;
   });
-  return { version: LOCAL_RECORD_VERSION, seed: parsed.seed, commands };
+  return {
+    version: LOCAL_RECORD_VERSION,
+    protocolVersion: PROTOCOL_VERSION,
+    scenarioVersion: DEVELOPMENT_SCENARIO.version,
+    seed: parsed.seed,
+    commands,
+  };
 };
 
 const safeSummary = (domainEvent: DomainEvent, sequence: number): SafeEventSummary => {
@@ -118,12 +141,23 @@ const safeSummary = (domainEvent: DomainEvent, sequence: number): SafeEventSumma
   }
   if (domainEvent.kind === "observation-made")
     return { ...base, message: "A new Observation was recorded in the Logbook.", tone: "positive" };
-  if (domainEvent.kind === "opportunity-salvaged")
+  if (domainEvent.kind === "opportunity-salvaged") {
+    const family = domainEvent.payload["family"];
+    const value = domainEvent.payload["value"];
+    const result =
+      family === "provision-cache"
+        ? `${value} Provisions restored`
+        : family === "repair-material"
+          ? `${value} Vessel Integrity restored`
+          : family === "findings-cache"
+            ? `${value} unbanked Findings recovered`
+            : "salvage recovered";
     return {
       ...base,
-      message: "An opportunity was salvaged for the return journey.",
+      message: `${result}.`,
       tone: "positive",
     };
+  }
   if (domainEvent.kind === "expedition-returned")
     return {
       ...base,
@@ -196,6 +230,12 @@ export class LocalAuthority {
 
   static load(storage: StoragePort): AuthorityLoadResult {
     const raw = storage.getItem(LOCAL_RECORD_KEY);
+    if (!raw && storage.getItem(LEGACY_LOCAL_RECORD_KEY) !== null)
+      return {
+        ok: false,
+        message:
+          "The deterministic resource rules changed in Revision 0.2. Your version-1 history cannot be replayed safely by this prototype and remains untouched until you confirm reset.",
+      };
     const record = raw
       ? (() => {
           try {
@@ -206,6 +246,8 @@ export class LocalAuthority {
         })()
       : ({
           version: LOCAL_RECORD_VERSION,
+          protocolVersion: PROTOCOL_VERSION,
+          scenarioVersion: DEVELOPMENT_SCENARIO.version,
           seed: DEFAULT_DEVELOPMENT_SEED,
           commands: [],
         } satisfies LocalRecord);
@@ -274,6 +316,8 @@ export class LocalAuthority {
     const nextCommands = [...this.commands, parsed.data];
     const nextRecord: LocalRecord = {
       version: LOCAL_RECORD_VERSION,
+      protocolVersion: PROTOCOL_VERSION,
+      scenarioVersion: DEVELOPMENT_SCENARIO.version,
       seed: this.seed,
       commands: nextCommands,
     };
@@ -297,6 +341,7 @@ export class LocalAuthority {
 
   reset(): void {
     this.storage.removeItem(LOCAL_RECORD_KEY);
+    this.storage.removeItem(LEGACY_LOCAL_RECORD_KEY);
   }
 }
 

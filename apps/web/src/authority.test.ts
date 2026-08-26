@@ -176,16 +176,18 @@ describe("local browser authority", () => {
       LOCAL_RECORD_KEY,
       JSON.stringify({
         version: LOCAL_RECORD_VERSION,
+        protocolVersion: 2,
+        scenarioVersion: "1.1.0",
         seed: DEFAULT_DEVELOPMENT_SEED,
         commands: [
           {
-            protocolVersion: 1,
+            protocolVersion: 2,
             commandId: "local-command-1",
             kind: "start-expedition",
             instruments: ["sounding-line", "weather-glass"],
           },
           {
-            protocolVersion: 1,
+            protocolVersion: 2,
             commandId: "local-command-4",
             kind: "travel",
             routeId: "r-hs",
@@ -204,10 +206,12 @@ describe("local browser authority", () => {
       LOCAL_RECORD_KEY,
       JSON.stringify({
         version: LOCAL_RECORD_VERSION,
+        protocolVersion: 2,
+        scenarioVersion: "1.1.0",
         seed: DEFAULT_DEVELOPMENT_SEED,
         commands: [
           {
-            protocolVersion: 1,
+            protocolVersion: 2,
             commandId: "imported-command",
             kind: "start-expedition",
             instruments: ["sounding-line", "weather-glass"],

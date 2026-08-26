@@ -65,8 +65,8 @@ function SetupControls(props: MissionControlProps): React.JSX.Element {
       </h2>
       {projection.phase === "failed" ? (
         <div className="failure-note" role="status">
-          <strong>Previous Expedition failed.</strong> Unbanked reward was lost; any visible Trace
-          is in the Logbook. Banked reward remains {projection.bankedReward}.
+          <strong>Previous Expedition failed.</strong> Unbanked Findings were lost; any visible
+          Trace is in the Logbook. Banked Findings remain {projection.waystation.bankedFindings}.
         </div>
       ) : null}
       <fieldset className="instrument-fieldset">
@@ -93,6 +93,11 @@ function SetupControls(props: MissionControlProps): React.JSX.Element {
           })}
         </div>
       </fieldset>
+      <p className="field-hint">
+        Each Expedition starts with 8 Provisions, 4 Vessel Integrity, and 2 Charges per selected
+        instrument. Travel spends Provisions; Observations spend Charges. Zero Vessel Integrity
+        causes failure. The Waystation restores this base loadout before departure.
+      </p>
       <button
         className="primary-button start-button"
         type="button"
@@ -110,6 +115,7 @@ function SetupControls(props: MissionControlProps): React.JSX.Element {
 
 function ExpeditionControls(props: MissionControlProps): React.JSX.Element {
   const { projection } = props;
+  const resources = projection.expeditionResources!;
   const routes = projection.actions.traversableRouteIds
     .map((routeId) => projection.knownRoutes.find((route) => route.id === routeId))
     .filter((route) => route !== undefined);
@@ -119,18 +125,35 @@ function ExpeditionControls(props: MissionControlProps): React.JSX.Element {
       <h2 id="control-title">At {displayName(projection.locationId)}</h2>
       <div className="resource-row" aria-label="Expedition resources">
         <span>
-          <strong>{projection.supply}</strong> Supply
+          <strong>
+            {resources.provisions} / {resources.maximumProvisions}
+          </strong>{" "}
+          Provisions
         </span>
         <span>
-          <strong>{projection.integrity}</strong> Integrity
+          <strong>
+            {resources.vesselIntegrity} / {resources.maximumVesselIntegrity}
+          </strong>{" "}
+          Vessel Integrity
         </span>
         <span>
-          <strong>{projection.unbankedReward}</strong> Unbanked
+          <strong>{resources.unbankedFindings}</strong> Unbanked Findings
         </span>
         <span>
-          <strong>{projection.bankedReward}</strong> Banked
+          <strong>{projection.waystation.bankedFindings}</strong> Banked Findings
         </span>
       </div>
+      <p className="instrument-summary">
+        Charges:{" "}
+        {resources.instrumentCharges
+          .map((item) => `${humanize(item.instrument)} ${item.remaining}/${item.maximum}`)
+          .join(" · ")}
+      </p>
+      <p className={`reserve-warning ${resources.returnReserveWarning}`} role="status">
+        Return Reserve: {resources.returnReserve ?? "unknown"} Provisions · margin{" "}
+        {resources.provisionMargin ?? "unknown"}. This estimate uses known routes only and is not a
+        safety guarantee.
+      </p>
       <p className="instrument-summary">
         Instruments: {projection.selectedInstruments.map(humanize).join(" · ")}
       </p>
@@ -150,7 +173,7 @@ function ExpeditionControls(props: MissionControlProps): React.JSX.Element {
             );
           })
         ) : (
-          <Unavailable>No currently traversable known route.</Unavailable>
+          <Unavailable>{availabilityText(projection.actions.availability.travel)}</Unavailable>
         )}
       </ActionGroup>
       <ActionGroup title="Observe">
@@ -166,25 +189,25 @@ function ExpeditionControls(props: MissionControlProps): React.JSX.Element {
             </button>
           ))
         ) : (
-          <Unavailable>
-            No legal Observation with the selected instruments and remaining Supply.
-          </Unavailable>
+          <Unavailable>{availabilityText(projection.actions.availability.observe)}</Unavailable>
         )}
       </ActionGroup>
       <ActionGroup title="Salvage">
-        {projection.actions.salvageableOpportunityIds.length ? (
-          projection.actions.salvageableOpportunityIds.map((opportunityId) => (
+        {projection.actions.salvageableOpportunities.length ? (
+          projection.actions.salvageableOpportunities.map((opportunity) => (
             <button
-              key={opportunityId}
+              key={opportunity.opportunityId}
               type="button"
               disabled={props.disabled}
-              onClick={() => props.dispatch({ kind: "salvage", opportunityId })}
+              onClick={() =>
+                props.dispatch({ kind: "salvage", opportunityId: opportunity.opportunityId })
+              }
             >
-              Salvage opportunity at {displayName(opportunityId)}
+              Salvage {humanize(opportunity.family)} at {displayName(opportunity.locationId)}
             </button>
           ))
         ) : (
-          <Unavailable>No currently salvageable opportunity.</Unavailable>
+          <Unavailable>{availabilityText(projection.actions.availability.salvage)}</Unavailable>
         )}
       </ActionGroup>
       <ActionGroup title="Return">
@@ -198,11 +221,7 @@ function ExpeditionControls(props: MissionControlProps): React.JSX.Element {
             Resolve safe return
           </button>
         ) : (
-          <Unavailable>
-            {projection.locationId === "harbor"
-              ? "Return becomes available after departing and reaching Lantern Harbor."
-              : "Return is unavailable until the Expedition reaches Lantern Harbor."}
-          </Unavailable>
+          <Unavailable>{availabilityText(projection.actions.availability.return)}</Unavailable>
         )}
       </ActionGroup>
       {projection.actions.failureReason ? (
@@ -225,6 +244,23 @@ function ExpeditionControls(props: MissionControlProps): React.JSX.Element {
       ) : null}
     </>
   );
+}
+
+function availabilityText(reason: string): string {
+  const messages: Record<string, string> = {
+    "expedition-not-underway": "Available after the Expedition gets underway.",
+    "no-known-route": "No known route is available here.",
+    "insufficient-provisions": "Not enough Provisions remain.",
+    "no-applicable-observation": "No applicable local subject can be observed.",
+    "instrument-not-selected": "The required instrument was not selected.",
+    "instrument-depleted": "The required selected instrument has no Charges remaining.",
+    "no-salvage-opportunity": "No unsalvaged opportunity is available here.",
+    "not-at-waystation": "Return is available only at Lantern Harbor.",
+    "return-not-earned": "Depart and return to Lantern Harbor before resolving return.",
+    "safe-return-available": "Resolve the available safe return before failure.",
+    available: "Available.",
+  };
+  return messages[reason] ?? "Unavailable under the current safe rules.";
 }
 
 function Unavailable({ children }: { children: React.ReactNode }): React.JSX.Element {

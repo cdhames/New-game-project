@@ -38,6 +38,8 @@ These documents define the current project baseline. More specific decision reco
   implemented TypeScript workspace, validation, and dependency choices.
 - [ADR-0004: Local browser authority and command log](decisions/ADR-0004-local-browser-authority-and-command-log.md) —
   in-process prototype authority, safe projections, replay persistence, and replacement criteria.
+- [ADR-0005: Revision 0.2 resource and return model](decisions/ADR-0005-revision-0.2-resource-and-return-model.md) —
+  Provisions, Charges, Vessel Integrity, Return Reserve, salvage families, Findings, and replay versioning.
 
 ## Decision labels
 

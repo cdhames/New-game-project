@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { App } from "./App";
 import {
   createLocalAuthority,
+  LEGACY_LOCAL_RECORD_KEY,
   LOCAL_RECORD_KEY,
   type LocalAuthority,
   type StoragePort,
@@ -78,18 +79,16 @@ describe("player-facing browser prototype", () => {
     const user = userEvent.setup();
     render(<App storage={new MemoryStorage()} />);
     await user.click(screen.getByRole("button", { name: "Start Expedition" }));
-    expect(
-      screen.getByText("No legal Observation with the selected instruments and remaining Supply."),
-    ).toBeInTheDocument();
+    expect(screen.getAllByText("Available after the Expedition gets underway.")).toHaveLength(2);
     expect(screen.queryByRole("button", { name: /Salvage opportunity/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Travel toward Whisper Shoal" }));
     expect(screen.getAllByRole("button", { name: /Observe/ }).length).toBeGreaterThan(0);
     expect(
-      screen.getByRole("button", { name: "Salvage opportunity at Whisper Shoal" }),
+      screen.getByRole("button", { name: "Salvage Provision Cache at Whisper Shoal" }),
     ).toBeInTheDocument();
   });
 
-  it("plays a complete round trip through the interface and displays a zero-supply legal return", async () => {
+  it("plays a complete round trip while Observations consume Charges, not Provisions", async () => {
     const user = userEvent.setup();
     render(<App storage={new MemoryStorage()} />);
     await user.click(screen.getByRole("button", { name: "Start Expedition" }));
@@ -99,10 +98,9 @@ describe("player-facing browser prototype", () => {
     });
     await user.click(observe);
     await user.click(observe);
-    await user.click(observe);
-    await user.click(observe);
     await user.click(screen.getByRole("button", { name: "Travel toward Lantern Harbor" }));
-    expect(screen.getByLabelText("Expedition resources")).toHaveTextContent("0 Supply");
+    expect(screen.getByLabelText("Expedition resources")).toHaveTextContent("6 / 8 Provisions");
+    expect(screen.getByText(/Charges:/)).toHaveTextContent("Sounding Line 0/2");
     expect(screen.getByRole("button", { name: "Resolve safe return" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /failure/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Resolve safe return" }));
@@ -111,11 +109,11 @@ describe("player-facing browser prototype", () => {
     ).toBeInTheDocument();
   });
 
-  it("publishes selected returned Observations, changes the Atlas, and limits selection to three", async () => {
+  it("publishes selected returned Observations and changes the Atlas", async () => {
     const storage = new MemoryStorage();
     const authority = authorityFor(storage);
     startAndTravel(authority);
-    for (let index = 0; index < 4; index += 1)
+    for (let index = 0; index < 2; index += 1)
       authority.dispatch({ kind: "observe", subjectId: "r-hs", category: "route" });
     authority.dispatch({ kind: "travel", routeId: "r-hs" });
     authority.dispatch({ kind: "resolve-return" });
@@ -125,13 +123,10 @@ describe("player-facing browser prototype", () => {
       name: "Choose Reports for the Atlas",
     }).parentElement!;
     const boxes = within(publication).getAllByRole("checkbox");
-    await user.click(boxes[0]!);
-    await user.click(boxes[1]!);
-    await user.click(boxes[2]!);
-    expect(boxes[3]).toBeDisabled();
+    for (const box of boxes) await user.click(box);
     await user.click(screen.getByRole("button", { name: "Publish selected Reports" }));
-    expect(screen.getAllByRole("article")).toHaveLength(9);
-    expect(screen.getAllByText(/Published to Atlas/)).toHaveLength(3);
+    expect(screen.getAllByRole("article")).toHaveLength(6 + boxes.length);
+    expect(screen.getAllByText(/Published to Atlas/)).toHaveLength(boxes.length);
   });
 
   it("keeps Publish nothing legal", async () => {
@@ -181,6 +176,19 @@ describe("player-facing browser prototype", () => {
     expect(storage.getItem(LOCAL_RECORD_KEY)).toBe("corrupt");
     await user.click(screen.getByRole("button", { name: "Reset local prototype" }));
     expect(screen.getByRole("button", { name: "Start Expedition" })).toBeInTheDocument();
+    expect(storage.getItem("unrelated")).toBe("preserve-me");
+  });
+
+  it("leaves a legacy version-1 record untouched until confirmed reset", async () => {
+    const storage = new MemoryStorage();
+    storage.setItem(LEGACY_LOCAL_RECORD_KEY, JSON.stringify({ version: 1, seed: 1, commands: [] }));
+    storage.setItem("unrelated", "preserve-me");
+    const user = userEvent.setup();
+    render(<App storage={storage} confirmReset={() => true} />);
+    expect(screen.getByText(/deterministic resource rules changed/i)).toBeInTheDocument();
+    expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY)).not.toBeNull();
+    await user.click(screen.getByRole("button", { name: "Reset local prototype" }));
+    expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY)).toBeNull();
     expect(storage.getItem("unrelated")).toBe("preserve-me");
   });
 
@@ -292,9 +300,10 @@ describe("player-facing browser prototype", () => {
     expect(
       within(panel).getByRole("button", { name: "Travel toward Whisper Shoal" }),
     ).toBeEnabled();
-    expect(within(panel).getByText(/No legal Observation/)).toBeInTheDocument();
-    expect(within(panel).getByText("No currently salvageable opportunity.")).toBeInTheDocument();
-    expect(within(panel).getByText(/Return becomes available/)).toBeInTheDocument();
+    expect(within(panel).getAllByText(/Available after the Expedition gets underway/)).toHaveLength(
+      2,
+    );
+    expect(within(panel).getByText(/Depart and return to Lantern Harbor/)).toBeInTheDocument();
     expect(
       screen.getByText(/Equivalent ordinary Travel controls are in the mission action panel/),
     ).toBeInTheDocument();
@@ -311,7 +320,7 @@ describe("player-facing browser prototype", () => {
     ).toBeInTheDocument();
     expect(within(panel).getAllByRole("button", { name: /Observe/ }).length).toBeGreaterThan(0);
     expect(
-      within(panel).getByRole("button", { name: "Salvage opportunity at Whisper Shoal" }),
+      within(panel).getByRole("button", { name: "Salvage Provision Cache at Whisper Shoal" }),
     ).toBeInTheDocument();
     expect(within(panel).getByRole("heading", { name: "Return" })).toBeInTheDocument();
     const rendered = document.body.textContent ?? "";

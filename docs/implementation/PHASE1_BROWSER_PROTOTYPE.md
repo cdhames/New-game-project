@@ -33,9 +33,9 @@ for a competitive, shared, persistent, or production world.
 
 ## Command-log persistence
 
-The versioned localStorage key is `the-long-map.local-prototype.v1`. Its value stores only:
+The current localStorage key is `the-long-map.local-prototype.v2`. Its value stores only:
 
-- local record version `1`;
+- local record version `2`, protocol version `2`, and scenario version `1.1.0`;
 - deterministic initial seed;
 - accepted, schema-valid `PlayerCommand` values in order.
 
@@ -55,7 +55,9 @@ accepted command list, and the sequence number in memory. A localStorage write f
 authority aligned with persisted history and presents a safe retry message. Domain events, canonical
 snapshots, and arbitrary React state are not persisted.
 
-Reset requires confirmation, removes only this prototype key, and creates a fresh deterministic
+If v2 is absent but the known v1 key exists, loading fails closed with a rules-version recovery
+screen and leaves v1 untouched. No speculative outcome migration is attempted. Confirmed reset
+removes only the known v1 and v2 Long Map keys and creates a fresh deterministic
 world. The App increments an explicit authority generation and remounts the view-owning game shell,
 so a valid active session immediately displays the new fresh projection instead of retaining the
 previous shell's initialized view. Unrelated localStorage values are untouched.
@@ -72,12 +74,12 @@ The seed is absent from the primary play surface and appears only under Develope
 
 ## Interface and visual system
 
-### Revision 0.2 Stage 1 shell
+### Revision 0.2 resource projection
 
 The browser now uses a deliberate single-screen desktop shell at widths of 1100 CSS pixels and
-above. A compact status bar shows the implemented phase, location, Supply, current Integrity under
-the player-facing label **Vessel Integrity**, banked and unbanked reward, world revision, and
-Drift-due state. The label change does not alter the existing Integrity rule. The map receives the
+above. A compact status bar distinguishes the restored Waystation baseline from active Expedition
+Provisions, Vessel Integrity, selected-instrument Charges, banked/unbanked Findings, Return Reserve,
+world revision, and Drift state. The map receives the
 largest workspace column, the mission/action panel remains beside it in normal grid layout, and the
 Atlas, Logbook, and Activity occupy one tabbed secondary-information panel. About, developer details,
 and the unchanged targeted reset are in a compact utility bar.
@@ -102,7 +104,9 @@ the map or secondary information. Atlas, Logbook, and Activity use accessible `t
 Arrow/Right Arrow selection.
 
 During an active Expedition the mission panel keeps Travel, Observe, Salvage, and Return in stable
-order. Unavailable categories remain present with a player-safe explanation. Legal Travel buttons are
+order. Unavailable categories remain present with a core-derived safe explanation. Return Reserve is
+identified as a known-route estimate rather than a safety guarantee, and salvage actions expose only
+their broad family until the sanitized result summary states the resolved value. Legal Travel buttons are
 generated only from `actions.traversableRouteIds` and known safe route descriptors inside the mission
 panel. The full known-topology text alternative remains in the Atlas tab as secondary reference. The
 SVG description points to the equivalent mission-panel controls.
@@ -116,11 +120,11 @@ Actual in-app browser checks on `127.0.0.1` at 100% zoom produced these measurem
 
 | Phase / viewport | Document client / scroll size | Main panel bounds | Internal scrolling and overlap |
 | --- | --- | --- | --- |
-| Setup, 1366 × 768 | 1366 × 768 / 1366 × 768 | map 633 × 561; actions 314 × 561; tabs 371 × 561 | no panel overlap; Start Expedition reachable through the bounded action scroller |
-| Setup, 1440 × 900 | 1440 × 900 / 1440 × 900 | map 668 × 691; actions 332 × 691; tabs 392 × 691 | no panel overlap; Start Expedition visible without document scrolling |
-| Active, 1366 × 768 | 1366 × 768 / 1366 × 768 | map 633 × 561; actions 314 × 561; tabs 371 × 561 | action scroller 527 / 765 px; Atlas scroller 482 / 2193 px; no overlap |
-| Active, 1440 × 900 | 1440 × 900 / 1440 × 900 | map 668 × 691; actions 332 × 691; tabs 392 × 691 | action scroller 657 / 714 px; Atlas scroller 612 / 2125 px; no overlap |
-| Setup and active, 390 × 844 | 375 px measured layout width / 375 px scroll width | intentional vertical stack | no horizontal overflow or overlap; status → map → actions → tabs order |
+| Setup, 1366 × 768 | 1366 × 768 / 1366 × 768 | map 633 × 561; actions 314 × 561; tabs 371 × 561 | action scroller 527 / 757 px; no overlap |
+| Setup, 1440 × 900 | 1440 × 900 / 1440 × 900 | map 668 × 691; actions 332 × 691; tabs 392 × 691 | action scroller 657 / 719 px; no overlap |
+| Active, 1366 × 768 | 1366 × 768 / 1366 × 768 | map 633 × 561; actions 314 × 561; tabs 371 × 561 | action scroller 527 / 1642 px; all four action categories remain reachable; no overlap |
+| Active, 1440 × 900 | 1440 × 900 / 1440 × 900 | map 668 × 691; actions 332 × 691; tabs 392 × 691 | action scroller 657 / 1563 px; all four action categories remain reachable; no overlap |
+| Setup and active, 390 × 844 | 375 px measured layout width / 375 px scroll width | intentional vertical stack; active document height 2899 px | no horizontal overflow or overlap; status → map → actions → tabs order |
 
 The in-app browser's 390 CSS-pixel override reported a 375-pixel layout viewport, so both its client
 and scroll widths are recorded rather than claiming an unavailable 390-pixel layout width. Setup and

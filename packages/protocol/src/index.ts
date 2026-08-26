@@ -116,11 +116,7 @@ export const ActionAvailabilityReasonSchema = z.enum([
   "safe-return-available",
 ]);
 export type ActionAvailabilityReason = z.infer<typeof ActionAvailabilityReasonSchema>;
-export const SalvageFamilySchema = z.enum([
-  "findings-cache",
-  "provision-cache",
-  "repair-material",
-]);
+export const SalvageFamilySchema = z.enum(["findings-cache", "provision-cache", "repair-material"]);
 export type SalvageFamily = z.infer<typeof SalvageFamilySchema>;
 export const SafeSalvageDescriptorSchema = z.object({
   opportunityId: stableId,
@@ -153,12 +149,7 @@ export interface InstrumentChargeState {
   maximum: number;
 }
 export type ReturnReserveWarning =
-  | "at-waystation"
-  | "comfortable"
-  | "caution"
-  | "at-reserve"
-  | "below-reserve"
-  | "route-unknown";
+  "at-waystation" | "comfortable" | "caution" | "at-reserve" | "below-reserve" | "route-unknown";
 export interface ActiveExpeditionResources {
   provisions: number;
   maximumProvisions: number;

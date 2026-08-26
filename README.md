@@ -10,7 +10,9 @@ archipelago and decide which limited Observations to publish into a shared, impe
 This feature branch contains the first locally playable browser prototype plus the deterministic,
 headless TypeScript foundation for protocol, Expedition rules, replay, player-safe projections,
 tests, and seeded simulations. A local player can complete the Expedition, return or failure,
-publication, changed Atlas, and Drift loop in a responsive React interface.
+publication, changed Atlas, and Drift loop in a responsive React interface. Protocol 2 and scenario
+1.1.0 implement the Revision 0.2 resource foundation: 8 Provisions, 4 Vessel Integrity, 2 Charges
+per selected instrument, known-route Return Reserve, typed salvage, and Findings.
 
 This is not a hosted online game. There is no production service, persistent online world, API,
 database, deployment, account system, secure server authority, networking, or telemetry collection.
@@ -41,3 +43,6 @@ Individual checks are `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm 
 `127.0.0.1`; `pnpm preview:web` previews a production build locally. The smoke command prints
 deterministic machine-readable JSON; it validates infrastructure and is not evidence that the game
 is balanced.
+
+Browser history now uses the v2 local record. If a v1 prototype history is found, the app leaves it
+untouched and asks for a confirmed reset; reset removes only the known Long Map v1/v2 keys.

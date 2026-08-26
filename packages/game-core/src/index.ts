@@ -341,7 +341,8 @@ function actionAffordances(
   scenario = DEVELOPMENT_SCENARIO,
 ): ActionAffordances {
   const expedition = state.expedition;
-  const underway = state.phase === "expedition" && expedition !== null && expedition.travelCount > 0;
+  const underway =
+    state.phase === "expedition" && expedition !== null && expedition.travelCount > 0;
   const localObservationCandidates =
     underway && expedition
       ? [
@@ -393,8 +394,8 @@ function actionAffordances(
             );
           })
           .sort((a, b) =>
-          compareCodeUnits(`${a.subjectId}:${a.category}`, `${b.subjectId}:${b.category}`),
-        )
+            compareCodeUnits(`${a.subjectId}:${a.category}`, `${b.subjectId}:${b.category}`),
+          )
       : [];
   const salvageableOpportunities =
     state.phase === "expedition" &&
@@ -409,13 +410,11 @@ function actionAffordances(
               node.opportunity > 0 &&
               !expedition.salvagedOpportunityIds.includes(node.id),
           )
-          .map(
-            (node): SafeSalvageDescriptor => ({
-              opportunityId: node.id,
-              locationId: node.id,
-              family: node.salvageFamily!,
-            }),
-          )
+          .map((node): SafeSalvageDescriptor => ({
+            opportunityId: node.id,
+            locationId: node.id,
+            family: node.salvageFamily!,
+          }))
       : [];
   const selectedCandidates = expedition
     ? localObservationCandidates.filter((candidate) =>
@@ -456,14 +455,13 @@ function actionAffordances(
               ? "available"
               : "no-known-route",
       observe: observeAvailability,
-      salvage:
-        !underway
-          ? "expedition-not-underway"
-          : expedition!.provisions < SALVAGE_PROVISION_COST
-            ? "insufficient-provisions"
-            : salvageableOpportunities.length
-              ? "available"
-              : "no-salvage-opportunity",
+      salvage: !underway
+        ? "expedition-not-underway"
+        : expedition!.provisions < SALVAGE_PROVISION_COST
+          ? "insufficient-provisions"
+          : salvageableOpportunities.length
+            ? "available"
+            : "no-salvage-opportunity",
       return: canReturn
         ? "available"
         : state.phase !== "expedition"
@@ -576,8 +574,7 @@ export function applyCommand(
     if (applicability === "not-local") return reject(state, "subject-not-local");
     if (applicability === "invalid") return reject(state, "invalid-observation-subject");
     const instrument = methodFor[command.category];
-    if (!expedition.instruments.includes(instrument))
-      return reject(state, "instrument-required");
+    if (!expedition.instruments.includes(instrument)) return reject(state, "instrument-required");
     if ((expedition.instrumentCharges[instrument] ?? 0) < 1)
       return reject(state, "instrument-depleted");
     const observation: ObservationRecord = {
@@ -651,7 +648,9 @@ export function applyCommand(
     if (expedition.locationId !== scenario.waystationId) return reject(state, "not-at-waystation");
     if (!canResolveReturn(state, scenario)) return reject(state, "expedition-not-underway");
     next.phase = "returned";
-    next.bankedFindings += expedition.unbankedFindings;
+    const bankedFindings = expedition.unbankedFindings;
+    next.bankedFindings += bankedFindings;
+    next.expedition!.unbankedFindings = 0;
     next.personalObservations.push(...expedition.observations);
     next.resolvedExpeditions += 1;
     next.driftDue = next.driftDue || next.resolvedExpeditions % 3 === 0;
@@ -660,7 +659,7 @@ export function applyCommand(
       state: next,
       events: [
         snapshotEvent(next, "expedition-returned", {
-          bankedFindings: expedition.unbankedFindings,
+          bankedFindings,
           observationIds: expedition.observations.map((item) => item.id),
         }),
       ],
@@ -765,7 +764,11 @@ function canContinueOrReturn(state: CanonicalState): boolean {
       (route.a === expedition.locationId || route.b === expedition.locationId),
   );
 }
-function fail(state: CanonicalState, scenario: Scenario, reason: "stranded" | "vessel-integrity"): void {
+function fail(
+  state: CanonicalState,
+  scenario: Scenario,
+  reason: "stranded" | "vessel-integrity",
+): void {
   const expedition = state.expedition!;
   const recoverableFindings = Math.floor(expedition.unbankedFindings / 2);
   const observationIds = expedition.observations.slice(0, 2).map((item) => item.id);
@@ -833,7 +836,9 @@ export function calculateReturnReserve(
 ): number | null {
   if (locationId === scenario.waystationId) return 0;
   const known = knownRouteIds(state);
-  const queue: Array<{ nodeId: StableId; distance: number }> = [{ nodeId: locationId, distance: 0 }];
+  const queue: Array<{ nodeId: StableId; distance: number }> = [
+    { nodeId: locationId, distance: 0 },
+  ];
   const visited = new Set<StableId>([locationId]);
   while (queue.length) {
     const current = queue.shift()!;
