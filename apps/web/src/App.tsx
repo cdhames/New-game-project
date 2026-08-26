@@ -1,8 +1,9 @@
 import { useState } from "react";
-import type { Instrument, StableId } from "@long-map/protocol";
+import type { Instrument, PreparationPlan, StableId } from "@long-map/protocol";
 import {
   createLocalAuthority,
   LEGACY_LOCAL_RECORD_KEY,
+  LEGACY_LOCAL_RECORD_KEY_V2,
   LOCAL_RECORD_KEY,
   type AuthorityLoadResult,
   type StoragePort,
@@ -52,6 +53,12 @@ export function App({
     "weather-glass",
   ]);
   const [selectedReports, setSelectedReports] = useState<StableId[]>([]);
+  const [selectedCommissionId, setSelectedCommissionId] = useState<StableId | null>(null);
+  const [preparation, setPreparation] = useState<PreparationPlan>({
+    extraProvisions: 0,
+    reinforcedVesselIntegrity: false,
+    extraChargeInstruments: [],
+  });
   const [processing, setProcessing] = useState(false);
   const [authorityGeneration, setAuthorityGeneration] = useState(0);
 
@@ -60,8 +67,15 @@ export function App({
       return;
     storage.removeItem(LOCAL_RECORD_KEY);
     storage.removeItem(LEGACY_LOCAL_RECORD_KEY);
+    storage.removeItem(LEGACY_LOCAL_RECORD_KEY_V2);
     setSelectedReports([]);
     setSelectedInstruments(["sounding-line", "weather-glass"]);
+    setSelectedCommissionId(null);
+    setPreparation({
+      extraProvisions: 0,
+      reinforcedVesselIntegrity: false,
+      extraChargeInstruments: [],
+    });
     setLoadResult(createLocalAuthority(storage));
     setAuthorityGeneration((generation) => generation + 1);
   };
@@ -73,6 +87,10 @@ export function App({
       authority={loadResult.authority}
       selectedInstruments={selectedInstruments}
       setSelectedInstruments={setSelectedInstruments}
+      selectedCommissionId={selectedCommissionId}
+      setSelectedCommissionId={setSelectedCommissionId}
+      preparation={preparation}
+      setPreparation={setPreparation}
       selectedReports={selectedReports}
       setSelectedReports={setSelectedReports}
       processing={processing}

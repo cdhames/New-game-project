@@ -199,7 +199,7 @@ describe("headless simulation", () => {
   });
 
   it("does not mark a returned run complete before publication", () => {
-    const run = runExpedition("cautious", 9, 6);
+    const run = runExpedition("cautious", 9, 5);
     expect(run.completedFullLoop).toBe(false);
     expect(run.timedOut).toBe(true);
     expect(run.replay.commands.some((command) => command.kind === "publish-reports")).toBe(false);

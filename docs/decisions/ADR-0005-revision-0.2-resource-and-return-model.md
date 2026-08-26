@@ -11,7 +11,7 @@ coherent breaking revision rather than presentation-only aliases.
 
 ## Decision
 
-Protocol 2 and scenario 1.1.0 separate 8 Provisions, 4 Vessel Integrity, and 2 Charges for each
+Protocol 3 and scenario 1.2.0 retain 8 base Provisions, 4 base Vessel Integrity, and 2 base Charges for each
 selected instrument. Travel costs 1 Provision; Observation costs one matching Charge and no
 Provision; salvage costs 1 Provision before resolving. Zero Vessel Integrity fails the Expedition.
 The Waystation restores the base loadout only when a new Expedition starts.
@@ -31,8 +31,8 @@ Resolved salvage events preserve both the nominal scenario value and the bounded
 applied, plus Provision cost, net Provision change, and resulting resource totals. Presentation uses
 the applied result so capped caches or repair never overstate their effect.
 
-Browser record version 2 uses a new key and stores protocol and scenario versions. Known v1 history
-is not migrated or replayed under changed rules; it remains untouched until confirmed targeted reset.
+Browser record version 3 uses a new key and stores protocol and scenario versions. Known v1/v2
+history is not migrated or replayed under changed rules; it remains untouched until confirmed targeted reset.
 
 ## Alternatives considered
 
@@ -49,7 +49,8 @@ thresholds, immediate salvage utility, explicit reward banking, and safe UI expl
 consequences are a breaking replay/storage transition, larger projections, more UI density, and
 provisional tuning that still needs simulation and playtest evidence.
 
-Revise this decision if fixed-seed simulation exposes systematic legal-action dead ends or if
+ADR-0006 extends these base maximums with one-Expedition preparation purchases and variable Charge
+maximums. Revise this decision if fixed-seed simulation exposes systematic legal-action dead ends or if
 playtests show reserve warnings, Charge scarcity, salvage value, or Findings banking are confusing or
-produce poor choices. Commissions, preparation purchases, Atlas Contribution, final route-evidence
-presentation, and the final completion summary remain planned and outside this decision.
+produce poor choices. The final route-evidence presentation and comprehensive completion summary
+remain planned.

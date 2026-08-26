@@ -68,6 +68,10 @@ export function StatusBar({ projection }: { projection: PlayerSafeProjection }):
             {projection.driftDue ? " · Drift due" : ""}
           </dd>
         </div>
+        <div>
+          <dt>Atlas Contribution</dt>
+          <dd>{projection.waystation.atlasContribution} Reports</dd>
+        </div>
       </dl>
     </header>
   );

@@ -18,9 +18,9 @@ and constructs `PlayerSafeProjection`. React components receive only that projec
 summaries, legal-command dispatch functions, and local lifecycle controls.
 
 Persist a versioned record containing the deterministic seed and ordered accepted command history.
-Record version 2 also stores protocol version 2 and scenario version 1.1.0 under the v2 key. A lone
-known v1 record is left untouched and produces a recovery screen because replay outcomes changed;
-confirmed reset removes only the known v1 and v2 keys. No speculative migration is performed.
+Record version 3 stores protocol version 3 and scenario version 1.2.0 under the v3 key. Known v1 and
+v2 records are left untouched and produce a recovery screen because replay outcomes changed;
+confirmed reset removes only the known v1, v2, and v3 keys. No speculative migration is performed.
 On load, validate every stored command with `PlayerCommandSchema` and reconstruct state by replaying
 commands from the initial seed. Persist only after command acceptance. Do not store React state,
 canonical snapshots, or raw Domain events.

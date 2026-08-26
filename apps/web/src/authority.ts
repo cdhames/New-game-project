@@ -13,13 +13,15 @@ import {
   type ObservationCategory,
   type PlayerCommand,
   type PlayerSafeProjection,
+  type PreparationPlan,
   type StableId,
 } from "@long-map/protocol";
 import { displayName } from "./presentation";
 
 export const LEGACY_LOCAL_RECORD_KEY = "the-long-map.local-prototype.v1";
-export const LOCAL_RECORD_KEY = "the-long-map.local-prototype.v2";
-export const LOCAL_RECORD_VERSION = 2 as const;
+export const LEGACY_LOCAL_RECORD_KEY_V2 = "the-long-map.local-prototype.v2";
+export const LOCAL_RECORD_KEY = "the-long-map.local-prototype.v3";
+export const LOCAL_RECORD_VERSION = 3 as const;
 export const DEFAULT_DEVELOPMENT_SEED = 20_260_804;
 
 export interface LocalRecord {
@@ -46,7 +48,12 @@ export interface AuthorityView {
 }
 
 export type CommandIntent =
-  | { kind: "start-expedition"; instruments: Instrument[] }
+  | {
+      kind: "start-expedition";
+      instruments: Instrument[];
+      commissionId: StableId;
+      preparation: PreparationPlan;
+    }
   | { kind: "travel"; routeId: StableId }
   | { kind: "observe"; subjectId: StableId; category: ObservationCategory }
   | { kind: "salvage"; opportunityId: StableId }
@@ -235,11 +242,14 @@ export class LocalAuthority {
 
   static load(storage: StoragePort): AuthorityLoadResult {
     const raw = storage.getItem(LOCAL_RECORD_KEY);
-    if (!raw && storage.getItem(LEGACY_LOCAL_RECORD_KEY) !== null)
+    if (
+      !raw &&
+      (storage.getItem(LEGACY_LOCAL_RECORD_KEY) !== null ||
+        storage.getItem(LEGACY_LOCAL_RECORD_KEY_V2) !== null)
+    )
       return {
         ok: false,
-        message:
-          "The deterministic resource rules changed in Revision 0.2. Your version-1 history cannot be replayed safely by this prototype and remains untouched until you confirm reset.",
+        message: `The deterministic Commission and preparation rules changed in Revision 0.2. ${storage.getItem(LEGACY_LOCAL_RECORD_KEY_V2) !== null ? "Version-2" : "Version-1"} history was found; it cannot be replayed safely and remains untouched until you confirm reset.`,
       };
     const record = raw
       ? (() => {
@@ -347,6 +357,7 @@ export class LocalAuthority {
   reset(): void {
     this.storage.removeItem(LOCAL_RECORD_KEY);
     this.storage.removeItem(LEGACY_LOCAL_RECORD_KEY);
+    this.storage.removeItem(LEGACY_LOCAL_RECORD_KEY_V2);
   }
 }
 

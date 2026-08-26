@@ -5,6 +5,7 @@ import { App } from "./App";
 import {
   createLocalAuthority,
   LEGACY_LOCAL_RECORD_KEY,
+  LEGACY_LOCAL_RECORD_KEY_V2,
   LOCAL_RECORD_KEY,
   type LocalAuthority,
   type StoragePort,
@@ -29,10 +30,20 @@ const authorityFor = (storage: MemoryStorage): LocalAuthority => {
   return result.authority;
 };
 
+const chooseCommission = async (user: ReturnType<typeof userEvent.setup>): Promise<void> => {
+  await user.click(screen.getByRole("radio", { name: /Recover Salvage/i }));
+};
+
 const startAndTravel = (authority: LocalAuthority): void => {
   authority.dispatch({
     kind: "start-expedition",
     instruments: ["sounding-line", "weather-glass"],
+    commissionId: "commission-salvage",
+    preparation: {
+      extraProvisions: 0,
+      reinforcedVesselIntegrity: false,
+      extraChargeInstruments: [],
+    },
   });
   authority.dispatch({ kind: "travel", routeId: "r-hs" });
 };
@@ -48,13 +59,70 @@ const finishLoop = (storage: MemoryStorage, observations = 0): void => {
 };
 
 describe("player-facing browser prototype", () => {
+  it("offers unselected Commissions with rewards, preparation costs, and compatibility guidance", async () => {
+    const user = userEvent.setup();
+    render(<App storage={new MemoryStorage()} />);
+    expect(screen.getAllByRole("radio")).toHaveLength(4);
+    expect(screen.getAllByRole("radio").every((radio) => !radio.hasAttribute("checked"))).toBe(
+      true,
+    );
+    expect(screen.getAllByText("Reward: 3 Findings")).toHaveLength(2);
+    expect(screen.getByLabelText("Extra Provisions")).toHaveAttribute("max", "2");
+    expect(screen.getByText("4. Total cost: 0 Findings")).toBeInTheDocument();
+    const startButton = screen.getByRole("button", { name: "Start Expedition" });
+    expect(startButton).toBeDisabled();
+    await user.click(screen.getByRole("radio", { name: /Verify Report/i }));
+    await user.click(screen.getByRole("checkbox", { name: /^Weather GlassMeasures/ }));
+    await user.click(screen.getByRole("checkbox", { name: /^Field LensAssesses/ }));
+    expect(screen.getByRole("alert")).toHaveTextContent("requires the Weather Glass");
+    expect(startButton).toBeDisabled();
+  });
+
+  it("shows a completed result, spends earned Findings, and starts an upgraded second Expedition", async () => {
+    const storage = new MemoryStorage();
+    const authority = authorityFor(storage);
+    startAndTravel(authority);
+    authority.dispatch({ kind: "salvage", opportunityId: "shoal" });
+    authority.dispatch({ kind: "travel", routeId: "r-hs" });
+    authority.dispatch({ kind: "resolve-return" });
+    authority.dispatch({ kind: "publish-reports", observationIds: [] });
+    const user = userEvent.setup();
+    render(<App storage={storage} />);
+    expect(screen.getByLabelText("Previous Commission result")).toHaveTextContent("Success");
+    expect(screen.getByLabelText("Previous Commission result")).toHaveTextContent(
+      "2 of 2 Findings granted",
+    );
+    await chooseCommission(user);
+    await user.clear(screen.getByLabelText("Extra Provisions"));
+    await user.type(screen.getByLabelText("Extra Provisions"), "1");
+    expect(screen.getByText("4. Total cost: 1 Findings")).toBeInTheDocument();
+    expect(screen.getByText("Findings remaining: 1")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Start Expedition" }));
+    expect(screen.getByLabelText("Expedition resources")).toHaveTextContent("9 / 9 Provisions");
+    expect(screen.getByLabelText("Active Commission")).toHaveTextContent("Progress: Active");
+  });
+
+  it("leaves both v1 and v2 histories untouched until targeted confirmation", async () => {
+    const storage = new MemoryStorage();
+    storage.setItem(LEGACY_LOCAL_RECORD_KEY, "v1");
+    storage.setItem(LEGACY_LOCAL_RECORD_KEY_V2, "v2");
+    storage.setItem("unrelated", "keep");
+    const user = userEvent.setup();
+    render(<App storage={storage} confirmReset={() => true} />);
+    expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY)).toBe("v1");
+    expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY_V2)).toBe("v2");
+    await user.click(screen.getByRole("button", { name: "Reset local prototype" }));
+    expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY)).toBeNull();
+    expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY_V2)).toBeNull();
+    expect(storage.getItem("unrelated")).toBe("keep");
+  });
   it("renders the title, six Reports, three instruments, safe map, and legitimately known hidden route", () => {
     const storage = new MemoryStorage();
     render(<App storage={storage} />);
     expect(screen.getByRole("heading", { name: "The Long Map", level: 1 })).toBeInTheDocument();
     expect(screen.getByText("A world no one can see alone")).toBeInTheDocument();
     expect(screen.getAllByRole("article")).toHaveLength(6);
-    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    expect(screen.getAllByRole("checkbox")).toHaveLength(6);
     expect(screen.getAllByText("Pale Inlet ↔ Far Sound").length).toBeGreaterThan(0);
     expect(document.body).not.toHaveTextContent("Last Cairn");
     expect(document.body).not.toHaveTextContent("r-ol");
@@ -64,8 +132,10 @@ describe("player-facing browser prototype", () => {
     const user = userEvent.setup();
     render(<App storage={new MemoryStorage()} />);
     const start = screen.getByRole("button", { name: "Start Expedition" });
+    expect(start).toBeDisabled();
+    await chooseCommission(user);
     expect(start).toBeEnabled();
-    const line = screen.getByRole("checkbox", { name: /Sounding Line/ });
+    const line = screen.getByRole("checkbox", { name: /^Sounding LineVerifies/ });
     await user.click(line);
     expect(start).toBeDisabled();
     expect(screen.getByText("Select exactly two instruments to depart.")).toBeInTheDocument();
@@ -78,6 +148,7 @@ describe("player-facing browser prototype", () => {
   it("generates Observation and salvage controls only from legal player-safe affordances", async () => {
     const user = userEvent.setup();
     render(<App storage={new MemoryStorage()} />);
+    await chooseCommission(user);
     await user.click(screen.getByRole("button", { name: "Start Expedition" }));
     expect(screen.getAllByText("Available after the Expedition gets underway.")).toHaveLength(2);
     expect(screen.queryByRole("button", { name: /Salvage opportunity/ })).not.toBeInTheDocument();
@@ -91,6 +162,7 @@ describe("player-facing browser prototype", () => {
   it("plays a complete round trip while Observations consume Charges, not Provisions", async () => {
     const user = userEvent.setup();
     render(<App storage={new MemoryStorage()} />);
+    await chooseCommission(user);
     await user.click(screen.getByRole("button", { name: "Start Expedition" }));
     await user.click(screen.getByRole("button", { name: "Travel toward Whisper Shoal" }));
     const observe = screen.getByRole("button", {
@@ -134,7 +206,7 @@ describe("player-facing browser prototype", () => {
     expect(boxes[3]).toBeEnabled();
     await user.click(boxes[3]!);
     await user.click(screen.getByRole("button", { name: "Publish selected Reports" }));
-    expect(screen.getAllByRole("article")).toHaveLength(9);
+    expect(screen.getAllByRole("article")).toHaveLength(10);
     expect(screen.getAllByText(/Published to Atlas/)).toHaveLength(3);
   });
 
@@ -142,6 +214,7 @@ describe("player-facing browser prototype", () => {
     const storage = new MemoryStorage();
     const user = userEvent.setup();
     render(<App storage={storage} />);
+    await chooseCommission(user);
     await user.click(screen.getByRole("button", { name: "Start Expedition" }));
     await user.click(screen.getByRole("button", { name: "Travel toward Whisper Shoal" }));
     expect(
@@ -212,7 +285,9 @@ describe("player-facing browser prototype", () => {
     storage.setItem("unrelated", "preserve-me");
     const user = userEvent.setup();
     render(<App storage={storage} confirmReset={() => true} />);
-    expect(screen.getByText(/deterministic resource rules changed/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/deterministic Commission and preparation rules changed/i),
+    ).toBeInTheDocument();
     expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY)).not.toBeNull();
     await user.click(screen.getByRole("button", { name: "Reset local prototype" }));
     expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY)).toBeNull();
@@ -240,10 +315,10 @@ describe("player-facing browser prototype", () => {
       screen.getByText("The first accepted command will begin this local history."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Visible Traces" })).not.toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: /Sounding Line/ })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: /Weather Glass/ })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: /Field Lens/ })).not.toBeChecked();
-    expect(screen.getByRole("button", { name: "Start Expedition" })).toBeEnabled();
+    expect(screen.getByRole("checkbox", { name: /^Sounding LineVerifies/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /^Weather GlassMeasures/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /^Field LensAssesses/ })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Start Expedition" })).toBeDisabled();
     await user.click(screen.getByText("About and developer details"));
     expect(screen.getByText(/Accepted local commands: 0/)).toBeInTheDocument();
     expect(storage.getItem(LOCAL_RECORD_KEY)).toBeNull();
@@ -320,6 +395,7 @@ describe("player-facing browser prototype", () => {
   it("keeps all Expedition action categories visible and puts safe Travel controls in the action panel", async () => {
     const user = userEvent.setup();
     render(<App storage={new MemoryStorage()} />);
+    await chooseCommission(user);
     await user.click(screen.getByRole("button", { name: "Start Expedition" }));
     const panel = screen.getByTestId("mission-action-panel");
     for (const heading of ["Travel", "Observe", "Salvage", "Return"])
@@ -339,6 +415,7 @@ describe("player-facing browser prototype", () => {
   it("updates safe actions after travel without revealing hidden topology anywhere", async () => {
     const user = userEvent.setup();
     render(<App storage={new MemoryStorage()} />);
+    await chooseCommission(user);
     await user.click(screen.getByRole("button", { name: "Start Expedition" }));
     await user.click(screen.getByRole("button", { name: "Travel toward Whisper Shoal" }));
     const panel = screen.getByTestId("mission-action-panel");

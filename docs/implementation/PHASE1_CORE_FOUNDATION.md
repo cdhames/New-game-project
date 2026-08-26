@@ -49,7 +49,7 @@ security.
 
 ## Scenario and provisional tuning
 
-Scenario `1.1.0` is an original compact archipelago with 12 nodes, 18 routes, one Waystation, two
+Scenario `1.2.0` is an original compact archipelago with 12 nodes, 18 routes, one Waystation, two
 hidden routes, route hazards and conditions, node opportunities, and six mixed-quality baseline
 Reports with initial ages 6, 4, 3, 2, 1, and 0 logical steps. One hidden route is known through a
 baseline route Report; the other remains unrevealed. Protocol 2 Expeditions choose two instruments,
@@ -90,6 +90,14 @@ Expedition IDs at the same subject, category, value, and observed revision. Repo
 logical times can corroborate the same unchanged revision; duplicate Reports from one Expedition and
 claims from different values or revisions do not add evidence. Each Report retains its own timestamps
 and age.
+
+Protocol 3 adds deterministic public-knowledge Commission offers: verify prioritizes stale, weak,
+uncorroborated, old Reports; survey prioritizes missing or weak route evidence without duplicating
+verify; frontier uses known distance 2–3; salvage requires public opportunity evidence. Start
+atomically commits a Commission and optional preparation (up to +2 Provisions, +1 Integrity, and +1
+Charge per selected instrument) paid from banked Findings. Rewards resolve once at safe return,
+except verify, which resolves on matching publication. Player Reports increment non-spendable Atlas
+Contribution, and a bounded previous-Commission result survives Expedition clearing.
 
 All names, rewards, costs, hazard thresholds, and instrument mappings are tuning parameters.
 

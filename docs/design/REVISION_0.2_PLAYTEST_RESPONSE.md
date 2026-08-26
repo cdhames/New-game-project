@@ -15,11 +15,12 @@ do not yet satisfy Phase 1.
 All numeric values in this document are reversible initial tuning parameters, not permanent design
 law.
 
-**Implementation status:** The Stage 1 shell and the Revision 0.2 resource/planning foundation are
-implemented. This includes Provisions, Vessel Integrity, per-instrument Charges, Return Reserve,
-typed salvage families, Findings, safe action-availability reasons, and versioned deterministic
-replay. Commissions, preparation spending, Atlas Contribution, the final route-evidence
-presentation, and the final completion summary remain planned.
+**Implementation status:** The Stage 1 shell plus the Revision 0.2 resource, Commission, and
+preparation foundation are implemented. This includes Provisions, Vessel Integrity, variable
+per-instrument Charges, Return Reserve, typed salvage, Findings, four deterministic Commission
+families, progress/rewards, temporary preparation, Atlas Contribution, a concise previous result,
+safe action reasons, and versioned replay. The final route-evidence presentation and comprehensive
+Expedition completion summary remain planned.
 
 ## 1. Desktop information architecture
 
@@ -217,11 +218,11 @@ No stage below is implemented by this document.
 | Stage | Status | Work | Primary ownership |
 | ---: | --- | --- | --- |
 | 1 | Implemented on this branch | Application shell, panel hierarchy, desktop scrolling correction, mobile stack | Browser-only presentation and layout |
-| 2 | Planned | Revised player-safe projection fields and player-facing resource terminology | Protocol and game core, then browser rendering |
-| 3 | Planned | Commission generation/progress/completion and Findings earning/banking | Protocol and game core, then browser controls and presentation |
-| 4 | Planned | Return Reserve, base Provisions, instrument Charges, salvage cost, Vessel Integrity, restoration and warnings | Protocol and game core for rules/projection; browser for explanation and warnings |
+| 2 | Implemented on this branch | Revised player-safe projection fields and player-facing resource terminology | Protocol and game core, then browser rendering |
+| 3 | Implemented on this branch | Commission generation/progress/completion and Findings earning/banking | Protocol and game core, then browser controls and presentation |
+| 4 | Implemented on this branch | Return Reserve, base Provisions, instrument Charges, salvage cost, Vessel Integrity, restoration and warnings | Protocol and game core for rules/projection; browser for explanation and warnings |
 | 5 | Planned | Player-safe route-evidence projection and decision-time presentation | Protocol/game core filtering; browser presentation |
-| 6 | Planned | Expedition summary and temporary preparation spending | Protocol/game core for outcomes and purchases; browser summary and preparation UI |
+| 6 | Partially implemented | Temporary preparation and concise previous-Commission result; comprehensive Expedition summary remains planned | Protocol/game core for outcomes and purchases; browser summary and preparation UI |
 | 7 | Planned | Unit, property, replay, simulation, browser, responsive and accessibility validation; second owner playtest | All affected packages and browser; documentation for evidence |
 
 Stages that change commands, events, canonical state, deterministic rules, resource accounting,

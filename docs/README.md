@@ -40,6 +40,8 @@ These documents define the current project baseline. More specific decision reco
   in-process prototype authority, safe projections, replay persistence, and replacement criteria.
 - [ADR-0005: Revision 0.2 resource and return model](decisions/ADR-0005-revision-0.2-resource-and-return-model.md) —
   Provisions, Charges, Vessel Integrity, Return Reserve, salvage families, Findings, and replay versioning.
+- [ADR-0006: Commission and preparation loop](decisions/ADR-0006-commission-and-preparation-loop.md) —
+  deterministic Commission purpose, reward timing, temporary preparation, Atlas Contribution, and protocol-3 replay transition.
 
 ## Decision labels
 

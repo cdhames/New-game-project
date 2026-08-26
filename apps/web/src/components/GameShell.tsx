@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import type { Instrument, StableId } from "@long-map/protocol";
+import type { Instrument, PreparationPlan, StableId } from "@long-map/protocol";
 import {
   DEFAULT_DEVELOPMENT_SEED,
   type AuthorityView,
@@ -15,6 +15,10 @@ interface GameShellProps {
   authority: LocalAuthority;
   selectedInstruments: Instrument[];
   setSelectedInstruments: (next: Instrument[]) => void;
+  selectedCommissionId: StableId | null;
+  setSelectedCommissionId: (next: StableId | null) => void;
+  preparation: PreparationPlan;
+  setPreparation: (next: PreparationPlan) => void;
   selectedReports: StableId[];
   setSelectedReports: (next: StableId[]) => void;
   processing: boolean;
@@ -33,6 +37,14 @@ export function GameShell(props: GameShellProps): React.JSX.Element {
     const next = props.authority.dispatch(intent);
     setView(next);
     if (intent.kind === "publish-reports") props.setSelectedReports([]);
+    if (intent.kind === "publish-reports" || intent.kind === "resolve-failure") {
+      props.setSelectedCommissionId(null);
+      props.setPreparation({
+        extraProvisions: 0,
+        reinforcedVesselIntegrity: false,
+        extraChargeInstruments: [],
+      });
+    }
     queueMicrotask(() => {
       processingRef.current = false;
       props.setProcessing(false);
@@ -51,6 +63,10 @@ export function GameShell(props: GameShellProps): React.JSX.Element {
           projection={projection}
           selectedInstruments={props.selectedInstruments}
           setSelectedInstruments={props.setSelectedInstruments}
+          selectedCommissionId={props.selectedCommissionId}
+          setSelectedCommissionId={props.setSelectedCommissionId}
+          preparation={props.preparation}
+          setPreparation={props.setPreparation}
           selectedReports={props.selectedReports}
           setSelectedReports={props.setSelectedReports}
           dispatch={dispatch}

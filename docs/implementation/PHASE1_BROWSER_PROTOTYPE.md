@@ -33,9 +33,9 @@ for a competitive, shared, persistent, or production world.
 
 ## Command-log persistence
 
-The current localStorage key is `the-long-map.local-prototype.v2`. Its value stores only:
+The current localStorage key is `the-long-map.local-prototype.v3`. Its value stores only:
 
-- local record version `2`, protocol version `2`, and scenario version `1.1.0`;
+- local record version `3`, protocol version `3`, and scenario version `1.2.0`;
 - deterministic initial seed;
 - accepted, schema-valid `PlayerCommand` values in order.
 
@@ -55,9 +55,9 @@ accepted command list, and the sequence number in memory. A localStorage write f
 authority aligned with persisted history and presents a safe retry message. Domain events, canonical
 snapshots, and arbitrary React state are not persisted.
 
-If v2 is absent but the known v1 key exists, loading fails closed with a rules-version recovery
-screen and leaves v1 untouched. No speculative outcome migration is attempted. Confirmed reset
-removes only the known v1 and v2 Long Map keys and creates a fresh deterministic
+If v3 is absent but a known v1 or v2 key exists, loading fails closed with a rules-version recovery
+screen and leaves both legacy records untouched. No speculative outcome migration is attempted.
+Confirmed reset removes only the known v1, v2, and v3 Long Map keys and creates a fresh deterministic
 world. The App increments an explicit authority generation and remounts the view-owning game shell,
 so a valid active session immediately displays the new fresh projection instead of retaining the
 previous shell's initialized view. Unrelated localStorage values are untouched.
@@ -125,16 +125,17 @@ Actual in-app browser checks on `127.0.0.1` at 100% zoom produced these measurem
 
 | Phase / viewport | Document client / scroll size | Main panel bounds | Internal scrolling and overlap |
 | --- | --- | --- | --- |
-| Setup, 1366 × 768 | 1366 × 768 / 1366 × 768 | map 633 × 561; actions 314 × 561; tabs 371 × 561 | action scroller 527 / 757 px; no overlap |
-| Setup, 1440 × 900 | 1440 × 900 / 1440 × 900 | map 668 × 691; actions 332 × 691; tabs 392 × 691 | action scroller 657 / 719 px; no overlap |
-| Active, 1366 × 768 | 1366 × 768 / 1366 × 768 | map 633 × 561; actions 314 × 561; tabs 371 × 561 | action scroller 527 / 1642 px; all four action categories remain reachable; no overlap |
-| Active, 1440 × 900 | 1440 × 900 / 1440 × 900 | map 668 × 691; actions 332 × 691; tabs 392 × 691 | action scroller 657 / 1563 px; all four action categories remain reachable; no overlap |
-| Setup and active, 390 × 844 | 375 px measured layout width / 375 px scroll width | intentional vertical stack; active document height 2899 px | no horizontal overflow or overlap; status → map → actions → tabs order |
+| Setup/result, 1366 × 768 | 1366 × 768 / 1366 × 768 | map 633 × 553; actions 314 × 553; tabs 371 × 553 | action scroller 519 / 2468–2640 px; no overlap |
+| Active/publication, 1366 × 768 | 1366 × 768 / 1366 × 768 | map 633 × 535; actions 314 × 535; tabs 371 × 535 | action scroller 501 / 675–1257 px; all four action categories reachable; no overlap |
+| Setup/result, 1440 × 900 | 1440 × 900 / 1440 × 900 | map 668 × 685; actions 332 × 685; tabs 392 × 685 | action scroller 651 / 2496 px; no overlap |
+| Active/publication, 1440 × 900 | 1440 × 900 / 1440 × 900 | map 668 × 685; actions 332 × 685; tabs 392 × 685 | action scroller 651 / 654–1240 px; all four action categories reachable; no overlap |
+| Setup, active, publication, result, 390 × 844 | 375 px measured layout and scroll width | intentional vertical stack; phase-dependent document height 2068–3595 px | no horizontal overflow or overlap; status → map → actions → tabs order |
 
 The in-app browser's 390 CSS-pixel override reported a 375-pixel layout viewport, so both its client
 and scroll widths are recorded rather than claiming an unavailable 390-pixel layout width. Setup and
-active flows, tab selection and arrow-key movement, action visibility, panel scrolling, and Start
-Expedition reachability were inspected. The browser console contained no warnings or errors.
+active, publication, and next-setup flows, Commission progress, result retention, visible preparation
+cost/remaining Findings, upgraded 9/9 Provisions, action visibility, and panel scrolling were
+inspected. The browser console contained no warnings or errors.
 
 - Atlas chart: fixed SVG presentation coordinates for the 12 provisional scenario nodes, filtered
   strictly by safe known node and route IDs; ordinary DOM route controls provide equivalent use.
@@ -199,6 +200,7 @@ remain later-phase work subject to the project evidence gates.
 
 The 1366 × 768 setup and active mission content can require scrolling inside the bounded action
 panel, and the intentionally stacked mobile layout requires ordinary document scrolling. The current
-foundation does not implement Revision 0.2 Commissions, preparation spending, Atlas Contribution,
-route-evidence redesign, or Expedition completion summaries. It does not add new map content or
+foundation implements deterministic Commissions, preparation spending, Atlas Contribution, and a
+concise previous-Commission result. It does not implement the final route-evidence redesign or
+comprehensive Expedition completion summary. It does not add new map content or
 production authority, persistence, or infrastructure.

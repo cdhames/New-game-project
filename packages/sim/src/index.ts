@@ -150,8 +150,19 @@ export function legalCommands(view: PlayerSafeProjection, sequence: number): Pla
     commands.push(command(kind, sequence, commands.length + 1, extra));
   };
   if (view.actions.publicationRequired) {
+    const verify = view.activeCommission?.offer;
+    const matchingId =
+      verify?.family === "verify-report"
+        ? view.observations.find(
+            (item) => item.subjectId === verify.subjectId && item.category === verify.category,
+          )?.id
+        : undefined;
+    const observationIds = [
+      ...(matchingId ? [matchingId] : []),
+      ...view.actions.publicationEligibleObservationIds.filter((id) => id !== matchingId),
+    ].slice(0, 3);
     add("publish-reports", {
-      observationIds: view.actions.publicationEligibleObservationIds.slice(0, 3),
+      observationIds,
     });
     return commands;
   }
@@ -271,6 +282,8 @@ function chooseCommand(
   if (policy === "random") return legal[random % legal.length]!;
 
   const commission = view.activeCommission?.offer;
+  if (view.activeCommission?.progress.status === "objective-met")
+    return resolveReturn ?? routeToward(view, legal, waystationId) ?? travels[0] ?? legal[0]!;
   if (
     policy === "surveyor" &&
     commission &&
@@ -283,6 +296,16 @@ function chooseCommand(
         item.category === commission.category,
     );
     if (matching) return matching;
+    const targetRoute = view.knownRoutes.find((route) => route.id === commission.subjectId);
+    if (targetRoute) {
+      const distances = graphDistances(view, view.locationId);
+      const target = [targetRoute.a, targetRoute.b].sort(
+        (a, b) =>
+          (distances.get(a) ?? 1_000) - (distances.get(b) ?? 1_000) || compareCodeUnits(a, b),
+      )[0]!;
+      const toward = routeToward(view, legal, target);
+      if (toward) return toward;
+    }
   }
   if (commission?.family === "recover-salvage") {
     const salvage = legal.find(

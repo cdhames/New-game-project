@@ -318,6 +318,54 @@ h3 {
   display: grid;
   gap: 0.55rem;
 }
+
+.commission-grid,
+.commission-description,
+.active-commission-card,
+.commission-result-card,
+.preparation-fieldset,
+.preparation-total {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.commission-card,
+.active-commission-card,
+.commission-result-card,
+.preparation-fieldset,
+.preparation-total {
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  padding: 0.7rem;
+  background: var(--panel-strong);
+}
+
+.commission-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.commission-card.selected,
+.active-commission-card {
+  border-color: var(--glow);
+}
+
+.preparation-fieldset label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.preparation-fieldset input[type="number"] {
+  width: 4rem;
+  margin-left: auto;
+}
+
+.commission-match {
+  color: var(--glow);
+}
 .instrument-card,
 .publication-card {
   position: relative;

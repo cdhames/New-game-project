@@ -43,6 +43,12 @@ const roundTrip = (storage: MemoryStorage, publish: boolean): void => {
   authority.dispatch({
     kind: "start-expedition",
     instruments: ["sounding-line", "weather-glass"],
+    commissionId: "commission-salvage",
+    preparation: {
+      extraProvisions: 0,
+      reinforcedVesselIntegrity: false,
+      extraChargeInstruments: [],
+    },
   });
   authority.dispatch({ kind: "travel", routeId: "r-hs" });
   authority.dispatch({ kind: "observe", subjectId: "r-hs", category: "route" });
@@ -90,6 +96,12 @@ describe("local browser authority", () => {
     authority.dispatch({
       kind: "start-expedition",
       instruments: ["sounding-line", "field-lens"],
+      commissionId: "commission-salvage",
+      preparation: {
+        extraProvisions: 0,
+        reinforcedVesselIntegrity: false,
+        extraChargeInstruments: [],
+      },
     });
     authority.dispatch({ kind: "travel", routeId: "r-hs" });
     const before = authority.view().projection;
@@ -136,6 +148,12 @@ describe("local browser authority", () => {
     authority.dispatch({
       kind: "start-expedition",
       instruments: ["sounding-line", "weather-glass"],
+      commissionId: "commission-salvage",
+      preparation: {
+        extraProvisions: 0,
+        reinforcedVesselIntegrity: false,
+        extraChargeInstruments: [],
+      },
     });
     expect(commandIds(storage)).toEqual(["local-command-1"]);
   });
@@ -143,11 +161,26 @@ describe("local browser authority", () => {
   it("does not consume an accepted sequence number when command schema validation fails", () => {
     const storage = new MemoryStorage();
     const authority = load(storage);
-    authority.dispatch({ kind: "start-expedition", instruments: ["sounding-line"] });
+    authority.dispatch({
+      kind: "start-expedition",
+      instruments: ["sounding-line"],
+      commissionId: "commission-salvage",
+      preparation: {
+        extraProvisions: 0,
+        reinforcedVesselIntegrity: false,
+        extraChargeInstruments: [],
+      },
+    });
     expect(authority.view().acceptedCommandCount).toBe(0);
     authority.dispatch({
       kind: "start-expedition",
       instruments: ["sounding-line", "weather-glass"],
+      commissionId: "commission-salvage",
+      preparation: {
+        extraProvisions: 0,
+        reinforcedVesselIntegrity: false,
+        extraChargeInstruments: [],
+      },
     });
     expect(commandIds(storage)).toEqual(["local-command-1"]);
   });
@@ -158,6 +191,12 @@ describe("local browser authority", () => {
     authority.dispatch({
       kind: "start-expedition",
       instruments: ["sounding-line", "weather-glass"],
+      commissionId: "commission-salvage",
+      preparation: {
+        extraProvisions: 0,
+        reinforcedVesselIntegrity: false,
+        extraChargeInstruments: [],
+      },
     });
     authority.dispatch({ kind: "observe", subjectId: "r-hs", category: "route" });
 
@@ -176,18 +215,24 @@ describe("local browser authority", () => {
       LOCAL_RECORD_KEY,
       JSON.stringify({
         version: LOCAL_RECORD_VERSION,
-        protocolVersion: 2,
-        scenarioVersion: "1.1.0",
+        protocolVersion: 3,
+        scenarioVersion: "1.2.0",
         seed: DEFAULT_DEVELOPMENT_SEED,
         commands: [
           {
-            protocolVersion: 2,
+            protocolVersion: 3,
             commandId: "local-command-1",
             kind: "start-expedition",
             instruments: ["sounding-line", "weather-glass"],
+            commissionId: "commission-salvage",
+            preparation: {
+              extraProvisions: 0,
+              reinforcedVesselIntegrity: false,
+              extraChargeInstruments: [],
+            },
           },
           {
-            protocolVersion: 2,
+            protocolVersion: 3,
             commandId: "local-command-4",
             kind: "travel",
             routeId: "r-hs",
@@ -206,15 +251,21 @@ describe("local browser authority", () => {
       LOCAL_RECORD_KEY,
       JSON.stringify({
         version: LOCAL_RECORD_VERSION,
-        protocolVersion: 2,
-        scenarioVersion: "1.1.0",
+        protocolVersion: 3,
+        scenarioVersion: "1.2.0",
         seed: DEFAULT_DEVELOPMENT_SEED,
         commands: [
           {
-            protocolVersion: 2,
+            protocolVersion: 3,
             commandId: "imported-command",
             kind: "start-expedition",
             instruments: ["sounding-line", "weather-glass"],
+            commissionId: "commission-salvage",
+            preparation: {
+              extraProvisions: 0,
+              reinforcedVesselIntegrity: false,
+              extraChargeInstruments: [],
+            },
           },
         ],
       }),
@@ -232,6 +283,12 @@ describe("local browser authority", () => {
     const failed = authority.dispatch({
       kind: "start-expedition",
       instruments: ["sounding-line", "weather-glass"],
+      commissionId: "commission-salvage",
+      preparation: {
+        extraProvisions: 0,
+        reinforcedVesselIntegrity: false,
+        extraChargeInstruments: [],
+      },
     });
 
     expect(JSON.stringify(failed.projection)).toBe(JSON.stringify(before.projection));
@@ -243,6 +300,12 @@ describe("local browser authority", () => {
     const retried = authority.dispatch({
       kind: "start-expedition",
       instruments: ["sounding-line", "weather-glass"],
+      commissionId: "commission-salvage",
+      preparation: {
+        extraProvisions: 0,
+        reinforcedVesselIntegrity: false,
+        extraChargeInstruments: [],
+      },
     });
     expect(retried.projection.phase).toBe("expedition");
     expect(commandIds(storage)).toEqual(["local-command-1"]);

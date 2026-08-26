@@ -1,5 +1,5 @@
 import { type FormEvent } from "react";
-import type { Instrument, ObservationRecord, StableId } from "@long-map/protocol";
+import type { CommissionOffer, Instrument, ObservationRecord, StableId } from "@long-map/protocol";
 import {
   categoryName,
   displayName,
@@ -51,10 +51,30 @@ function PhaseControls(props: MissionControlProps): React.JSX.Element {
 function SetupControls(props: MissionControlProps): React.JSX.Element {
   const { projection, selectedInstruments } = props;
   const exactPair = selectedInstruments.length === 2;
+  const selectedCommission = projection.commissionOffers.find(
+    (offer) => offer.id === props.selectedCommissionId,
+  );
+  const requiredInstrument =
+    selectedCommission && "requiredInstrument" in selectedCommission
+      ? selectedCommission.requiredInstrument
+      : null;
+  const compatible = !requiredInstrument || selectedInstruments.includes(requiredInstrument);
+  const catalog = projection.preparationCatalog;
+  const proposedCost =
+    props.preparation.extraProvisions * catalog.extraProvisionCost +
+    Number(props.preparation.reinforcedVesselIntegrity) * catalog.reinforcedVesselIntegrityCost +
+    props.preparation.extraChargeInstruments.length * catalog.extraChargeCost;
+  const remaining = catalog.bankedFindings - proposedCost;
   const toggle = (instrument: Instrument): void => {
-    if (selectedInstruments.includes(instrument))
+    if (selectedInstruments.includes(instrument)) {
       props.setSelectedInstruments(selectedInstruments.filter((item) => item !== instrument));
-    else if (selectedInstruments.length < 2)
+      props.setPreparation({
+        ...props.preparation,
+        extraChargeInstruments: props.preparation.extraChargeInstruments.filter(
+          (item) => item !== instrument,
+        ),
+      });
+    } else if (selectedInstruments.length < 2)
       props.setSelectedInstruments([...selectedInstruments, instrument]);
   };
   return (
@@ -69,8 +89,46 @@ function SetupControls(props: MissionControlProps): React.JSX.Element {
           Trace is in the Logbook. Banked Findings remain {projection.waystation.bankedFindings}.
         </div>
       ) : null}
+      {projection.previousCommissionResult ? (
+        <article className="commission-result-card" aria-label="Previous Commission result">
+          <strong>
+            Previous Commission: {humanize(projection.previousCommissionResult.result)}
+          </strong>
+          <span>
+            {projection.previousCommissionResult.findingsRewardGranted} of{" "}
+            {projection.previousCommissionResult.findingsRewardOffered} Findings granted
+          </span>
+          <span>
+            Preparation spent: {projection.previousCommissionResult.preparationFindingsSpent}
+          </span>
+          <span>
+            Banked Findings: {projection.waystation.bankedFindings} · Atlas Contribution:{" "}
+            {projection.waystation.atlasContribution}
+          </span>
+        </article>
+      ) : null}
+      <section aria-labelledby="commission-choice-title">
+        <h3 id="commission-choice-title">1. Choose a Commission</h3>
+        <p className="field-hint">A Commission is the reason for the Expedition.</p>
+        <div className="commission-grid">
+          {projection.commissionOffers.map((offer) => (
+            <label
+              className={`commission-card ${props.selectedCommissionId === offer.id ? "selected" : ""}`}
+              key={offer.id}
+            >
+              <input
+                type="radio"
+                name="commission"
+                checked={props.selectedCommissionId === offer.id}
+                onChange={() => props.setSelectedCommissionId(offer.id)}
+              />
+              <CommissionDescription offer={offer} />
+            </label>
+          ))}
+        </div>
+      </section>
       <fieldset className="instrument-fieldset">
-        <legend>Choose exactly two instruments</legend>
+        <legend>2. Choose exactly two instruments</legend>
         <p className="selection-count" aria-live="polite">
           {selectedInstruments.length} of 2 selected
         </p>
@@ -93,6 +151,73 @@ function SetupControls(props: MissionControlProps): React.JSX.Element {
           })}
         </div>
       </fieldset>
+      {!compatible ? (
+        <p className="failure-note" role="alert">
+          This Commission requires the {humanize(requiredInstrument!)}. Keep the Commission or
+          change the loadout before departure.
+        </p>
+      ) : null}
+      <fieldset className="preparation-fieldset">
+        <legend>3. Choose optional preparation</legend>
+        <p>
+          Banked Findings available: <strong>{catalog.bankedFindings}</strong>. Purchases apply only
+          to the next Expedition.
+        </p>
+        <label>
+          Extra Provisions (0–{catalog.maximumExtraProvisions}, {catalog.extraProvisionCost} Finding
+          each)
+          <input
+            aria-label="Extra Provisions"
+            type="number"
+            min="0"
+            max={catalog.maximumExtraProvisions}
+            value={props.preparation.extraProvisions}
+            onChange={(event) =>
+              props.setPreparation({
+                ...props.preparation,
+                extraProvisions: Number(event.target.value),
+              })
+            }
+          />
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={props.preparation.reinforcedVesselIntegrity}
+            onChange={(event) =>
+              props.setPreparation({
+                ...props.preparation,
+                reinforcedVesselIntegrity: event.target.checked,
+              })
+            }
+          />
+          Reinforced Vessel Integrity (+1 maximum, {catalog.reinforcedVesselIntegrityCost} Findings)
+        </label>
+        {selectedInstruments.map((instrument) => (
+          <label key={instrument}>
+            <input
+              type="checkbox"
+              checked={props.preparation.extraChargeInstruments.includes(instrument)}
+              onChange={(event) =>
+                props.setPreparation({
+                  ...props.preparation,
+                  extraChargeInstruments: event.target.checked
+                    ? [...props.preparation.extraChargeInstruments, instrument]
+                    : props.preparation.extraChargeInstruments.filter(
+                        (item) => item !== instrument,
+                      ),
+                })
+              }
+            />
+            Extra {humanize(instrument)} Charge (+1 current and maximum, {catalog.extraChargeCost}{" "}
+            Finding)
+          </label>
+        ))}
+      </fieldset>
+      <div className="preparation-total" role="status">
+        <strong>4. Total cost: {proposedCost} Findings</strong>
+        <span>Findings remaining: {remaining}</span>
+      </div>
       <p className="field-hint">
         Each Expedition starts with 8 Provisions, 4 Vessel Integrity, and 2 Charges per selected
         instrument. Travel spends Provisions; Observations spend Charges. Zero Vessel Integrity
@@ -101,13 +226,26 @@ function SetupControls(props: MissionControlProps): React.JSX.Element {
       <button
         className="primary-button start-button"
         type="button"
-        disabled={props.disabled || !exactPair || !projection.actions.canStartExpedition}
+        disabled={
+          props.disabled ||
+          !selectedCommission ||
+          !exactPair ||
+          !compatible ||
+          remaining < 0 ||
+          !projection.actions.canStartExpedition
+        }
         onClick={() =>
-          props.dispatch({ kind: "start-expedition", instruments: selectedInstruments })
+          props.dispatch({
+            kind: "start-expedition",
+            instruments: selectedInstruments,
+            commissionId: selectedCommission!.id,
+            preparation: props.preparation,
+          })
         }
       >
         Start Expedition
       </button>
+      {!selectedCommission ? <p className="field-hint">Choose one Commission to depart.</p> : null}
       {!exactPair ? <p className="field-hint">Select exactly two instruments to depart.</p> : null}
     </>
   );
@@ -123,6 +261,7 @@ function ExpeditionControls(props: MissionControlProps): React.JSX.Element {
     <>
       <p className="eyebrow">Expedition underway</p>
       <h2 id="control-title">At {displayName(projection.locationId)}</h2>
+      <ActiveCommissionCard projection={projection} />
       <div className="resource-row" aria-label="Expedition resources">
         <span>
           <strong>
@@ -302,6 +441,7 @@ function PublicationControls(props: MissionControlProps): React.JSX.Element {
     <form onSubmit={publish}>
       <p className="eyebrow">Successful return</p>
       <h2 id="control-title">Choose Reports for the Atlas</h2>
+      <ActiveCommissionCard projection={props.projection} />
       <p>Publish zero to three eligible Observations; unpublished evidence stays personal.</p>
       <p className="selection-count" aria-live="polite">
         {props.selectedReports.length} of 3 publication slots selected
@@ -318,6 +458,11 @@ function PublicationControls(props: MissionControlProps): React.JSX.Element {
                 onChange={() => toggle(observation.id)}
               />
               <ObservationDescription observation={observation} />
+              {props.projection.activeCommission?.offer.family === "verify-report" &&
+              observation.subjectId === props.projection.activeCommission.offer.subjectId &&
+              observation.category === props.projection.activeCommission.offer.category ? (
+                <strong className="commission-match">Matches the verification Commission</strong>
+              ) : null}
             </label>
           );
         })}
@@ -335,6 +480,60 @@ function PublicationControls(props: MissionControlProps): React.JSX.Element {
         </button>
       </div>
     </form>
+  );
+}
+
+function CommissionDescription({ offer }: { offer: CommissionOffer }): React.JSX.Element {
+  const objective =
+    offer.family === "verify-report"
+      ? `Verify the ${categoryName(offer.category)} Report at ${displayName(offer.subjectId)}`
+      : offer.family === "survey"
+        ? `Survey ${categoryName(offer.category)} at ${displayName(offer.subjectId)}`
+        : offer.family === "reach-frontier"
+          ? `Reach ${displayName(offer.targetLocationId)} and return`
+          : `Recover salvage at ${displayName(offer.targetLocationId)} and return`;
+  return (
+    <span className="commission-description">
+      <strong>{humanize(offer.family)}</strong>
+      <span>{objective}</span>
+      <span>
+        Completion: objective plus safe return
+        {offer.publicationRequired ? " and matching Report publication" : ""}.
+      </span>
+      <span>Reward: {offer.findingsReward} Findings</span>
+      {"requiredInstrument" in offer ? (
+        <span>Required instrument: {humanize(offer.requiredInstrument)}</span>
+      ) : null}
+      <span>
+        {offer.publicationRequired ? "Publication required" : "No publication required for reward"}
+      </span>
+    </span>
+  );
+}
+
+function ActiveCommissionCard({
+  projection,
+}: {
+  projection: MissionControlProps["projection"];
+}): React.JSX.Element | null {
+  const active = projection.activeCommission;
+  if (!active) return null;
+  return (
+    <article className="active-commission-card" aria-label="Active Commission">
+      <CommissionDescription offer={active.offer} />
+      <strong>Progress: {humanize(active.progress.status)}</strong>
+      <span>
+        {active.offer.family === "reach-frontier"
+          ? `Target visited: ${active.progress.targetVisited ? "yes" : "no"}`
+          : active.offer.family === "recover-salvage"
+            ? `Target salvage recovered: ${active.progress.targetSalvageRecovered ? "yes" : "no"}`
+            : `Matching Observation recorded: ${active.progress.matchingObservationRecorded ? "yes" : "no"}`}
+      </span>
+      <span>
+        Safe return required
+        {active.offer.publicationRequired ? "; matching publication also required" : ""}.
+      </span>
+    </article>
   );
 }
 
