@@ -2,6 +2,8 @@ import {
   PROTOCOL_VERSION,
   type ActionAffordances,
   type AtlasClaim,
+  type CommissionOffer,
+  type CommissionProgress,
   type DomainEvent,
   type EvidenceQuality,
   type Instrument,
@@ -9,6 +11,8 @@ import {
   type ObservationRecord,
   type PlayerCommand,
   type PlayerSafeProjection,
+  type PreparationPlan,
+  type PreviousCommissionResult,
   type RejectionReason,
   type ReportRecord,
   type SalvageFamily,
@@ -26,6 +30,9 @@ export const BASE_VESSEL_INTEGRITY = 4;
 export const BASE_INSTRUMENT_CHARGES = 2;
 export const TRAVEL_PROVISION_COST = 1;
 export const SALVAGE_PROVISION_COST = 1;
+export const EXTRA_PROVISION_COST = 1;
+export const REINFORCED_INTEGRITY_COST = 2;
+export const EXTRA_CHARGE_COST = 1;
 
 export interface RouteTruth {
   id: StableId;
@@ -49,7 +56,7 @@ export interface WorldTruth {
   subjectLastChangedRevision: Record<StableId, number>;
 }
 export interface Scenario {
-  version: "1.1.0";
+  version: "1.2.0";
   initialLogicalTime: number;
   waystationId: StableId;
   nodes: NodeTruth[];
@@ -66,7 +73,7 @@ export interface ExpeditionState {
   maximumProvisions: number;
   vesselIntegrity: number;
   maximumVesselIntegrity: number;
-  instrumentCharges: Partial<Record<Instrument, number>>;
+  instrumentCharges: Partial<Record<Instrument, { current: number; maximum: number }>>;
   locationId: StableId;
   previousLocationId: StableId | null;
   visited: StableId[];
@@ -74,10 +81,14 @@ export interface ExpeditionState {
   travelCount: number;
   unbankedFindings: number;
   salvagedOpportunityIds: StableId[];
+  commission: CommissionOffer;
+  commissionProgress: CommissionProgress;
+  preparation: PreparationPlan;
+  preparationFindingsSpent: number;
 }
 export interface CanonicalState {
   protocolVersion: typeof PROTOCOL_VERSION;
-  scenarioVersion: "1.1.0";
+  scenarioVersion: "1.2.0";
   revision: number;
   logicalTime: number;
   rng: RngState;
@@ -91,6 +102,8 @@ export interface CanonicalState {
   personalObservations: ObservationRecord[];
   traces: TraceRecord[];
   bankedFindings: number;
+  atlasContribution: number;
+  previousCommissionResult: PreviousCommissionResult | null;
   processedCommandIds: StableId[];
 }
 export interface ApplySuccess {
@@ -209,7 +222,7 @@ const baseline = (
   };
 };
 export const DEVELOPMENT_SCENARIO: Scenario = {
-  version: "1.1.0",
+  version: "1.2.0",
   initialLogicalTime: INITIAL_LOGICAL_TIME,
   waystationId: "harbor",
   nodes,
@@ -252,6 +265,8 @@ export function createInitialState(seed: number, scenario = DEVELOPMENT_SCENARIO
     personalObservations: [],
     traces: [],
     bankedFindings: 0,
+    atlasContribution: 0,
+    previousCommissionResult: null,
     processedCommandIds: [],
   };
 }
@@ -290,6 +305,154 @@ function knownRouteIds(state: CanonicalState): Set<StableId> {
     if (evidence.category === "route") known.add(evidence.subjectId);
   return known;
 }
+function reportClaim(state: CanonicalState, report: ReportRecord): AtlasClaim {
+  return {
+    ...report,
+    age: state.logicalTime - report.observedAt,
+    potentiallyStale:
+      (state.world.subjectLastChangedRevision[report.subjectId] ?? 0) > report.observedRevision,
+    independentCorroboration: new Set(
+      compatibleReports(report, state.reports).map((item) => item.expeditionId),
+    ).size,
+  };
+}
+function knownDistances(state: CanonicalState, origin: StableId): Map<StableId, number> {
+  const known = knownRouteIds(state);
+  const distances = new Map<StableId, number>([[origin, 0]]);
+  const queue = [origin];
+  while (queue.length) {
+    const current = queue.shift()!;
+    for (const route of state.world.routes
+      .filter((item) => known.has(item.id) && (item.a === current || item.b === current))
+      .sort((a, b) => compareCodeUnits(a.id, b.id))) {
+      const neighbor = otherEnd(route, current);
+      if (!distances.has(neighbor)) {
+        distances.set(neighbor, distances.get(current)! + 1);
+        queue.push(neighbor);
+      }
+    }
+  }
+  return distances;
+}
+const qualityRank: Record<EvidenceQuality, number> = { low: 0, medium: 1, high: 2 };
+function weakestEvidence(claims: AtlasClaim[]): AtlasClaim | undefined {
+  return [...claims].sort(
+    (a, b) =>
+      Number(b.potentiallyStale) - Number(a.potentiallyStale) ||
+      qualityRank[a.quality] - qualityRank[b.quality] ||
+      a.independentCorroboration - b.independentCorroboration ||
+      b.age - a.age ||
+      compareCodeUnits(a.reportId, b.reportId),
+  )[0];
+}
+export function generateCommissionOffers(
+  state: CanonicalState,
+  scenario = DEVELOPMENT_SCENARIO,
+): CommissionOffer[] {
+  if (!canStartExpedition(state)) return [];
+  const knownRoutes = knownRouteIds(state);
+  const knownNodes = new Set<StableId>([
+    scenario.waystationId,
+    ...state.world.routes
+      .filter((route) => knownRoutes.has(route.id))
+      .flatMap((route) => [route.a, route.b]),
+  ]);
+  const claims = state.reports.map((report) => reportClaim(state, report));
+  const legallyObservable = claims.filter((claim) =>
+    claim.category === "opportunity"
+      ? knownNodes.has(claim.subjectId)
+      : knownRoutes.has(claim.subjectId),
+  );
+  const offers: CommissionOffer[] = [];
+  const verify = weakestEvidence(legallyObservable);
+  if (verify)
+    offers.push({
+      id: "commission-verify",
+      family: "verify-report",
+      findingsReward: 3,
+      publicationRequired: true,
+      reportId: verify.reportId,
+      subjectId: verify.subjectId,
+      category: verify.category,
+      requiredInstrument: methodFor[verify.category],
+    });
+
+  const surveyPairs = [...knownRoutes]
+    .sort(compareCodeUnits)
+    .flatMap((subjectId) =>
+      (["route", "hazard", "condition"] as ObservationCategory[]).map((category) => ({
+        subjectId,
+        category,
+        reports: claims.filter(
+          (claim) => claim.subjectId === subjectId && claim.category === category,
+        ),
+      })),
+    )
+    .filter((pair) => !(verify?.subjectId === pair.subjectId && verify.category === pair.category))
+    .sort((a, b) => {
+      const aw = weakestEvidence(a.reports);
+      const bw = weakestEvidence(b.reports);
+      return (
+        Number(a.reports.length > 0) - Number(b.reports.length > 0) ||
+        Number(Boolean(bw?.potentiallyStale)) - Number(Boolean(aw?.potentiallyStale)) ||
+        (aw ? qualityRank[aw.quality] : -1) - (bw ? qualityRank[bw.quality] : -1) ||
+        (aw?.independentCorroboration ?? -1) - (bw?.independentCorroboration ?? -1) ||
+        (bw?.age ?? 0) - (aw?.age ?? 0) ||
+        compareCodeUnits(`${a.subjectId}:${a.category}`, `${b.subjectId}:${b.category}`)
+      );
+    });
+  const survey = surveyPairs[0];
+  if (survey)
+    offers.push({
+      id: "commission-survey",
+      family: "survey",
+      findingsReward: 2,
+      publicationRequired: false,
+      subjectId: survey.subjectId,
+      category: survey.category,
+      requiredInstrument: methodFor[survey.category],
+    });
+
+  const distances = knownDistances(state, scenario.waystationId);
+  const frontier = [...distances]
+    .filter(
+      ([nodeId, distance]) =>
+        nodeId !== scenario.waystationId && distance >= 2 && distance <= 3 && distance * 2 <= 6,
+    )
+    .sort((a, b) => b[1] - a[1] || compareCodeUnits(a[0], b[0]))[0];
+  if (frontier)
+    offers.push({
+      id: "commission-frontier",
+      family: "reach-frontier",
+      findingsReward: 3,
+      publicationRequired: false,
+      targetLocationId: frontier[0],
+    });
+
+  const salvage = claims
+    .filter(
+      (claim) =>
+        claim.category === "opportunity" &&
+        knownNodes.has(claim.subjectId) &&
+        distances.has(claim.subjectId),
+    )
+    .sort(
+      (a, b) =>
+        distances.get(a.subjectId)! - distances.get(b.subjectId)! ||
+        b.age - a.age ||
+        qualityRank[a.quality] - qualityRank[b.quality] ||
+        compareCodeUnits(a.subjectId, b.subjectId),
+    )[0];
+  if (salvage)
+    offers.push({
+      id: "commission-salvage",
+      family: "recover-salvage",
+      findingsReward: 2,
+      publicationRequired: false,
+      targetLocationId: salvage.subjectId,
+    });
+  return offers;
+}
 function observationApplicability(
   state: CanonicalState,
   location: StableId,
@@ -324,6 +487,46 @@ function canResolveReturn(state: CanonicalState, scenario: Scenario): boolean {
     state.expedition.locationId === scenario.waystationId &&
     state.expedition.travelCount >= 2
   );
+}
+function preparationCost(plan: PreparationPlan): number {
+  return (
+    plan.extraProvisions * EXTRA_PROVISION_COST +
+    (plan.reinforcedVesselIntegrity ? REINFORCED_INTEGRITY_COST : 0) +
+    plan.extraChargeInstruments.length * EXTRA_CHARGE_COST
+  );
+}
+function objectiveMet(expedition: ExpeditionState): boolean {
+  const progress = expedition.commissionProgress;
+  if (expedition.commission.family === "reach-frontier") return progress.targetVisited;
+  if (expedition.commission.family === "recover-salvage") return progress.targetSalvageRecovered;
+  return progress.matchingObservationRecorded;
+}
+function updateObjectiveStatus(expedition: ExpeditionState): void {
+  if (expedition.commissionProgress.status === "active" && objectiveMet(expedition))
+    expedition.commissionProgress.status = "objective-met";
+}
+function previousResult(
+  expedition: ExpeditionState,
+  result: PreviousCommissionResult["result"],
+): PreviousCommissionResult {
+  const offer = expedition.commission;
+  return {
+    commissionId: offer.id,
+    family: offer.family,
+    result,
+    objectiveMet: objectiveMet(expedition),
+    findingsRewardOffered: offer.findingsReward,
+    findingsRewardGranted: expedition.commissionProgress.findingsRewardGranted
+      ? offer.findingsReward
+      : 0,
+    publicationRequired: offer.publicationRequired,
+    requiredPublicationOccurred: expedition.commissionProgress.requiredReportPublished,
+    preparationFindingsSpent: expedition.preparationFindingsSpent,
+    ...(offer.family === "verify-report" || offer.family === "survey"
+      ? { subjectId: offer.subjectId }
+      : { targetLocationId: offer.targetLocationId }),
+    expeditionId: expedition.id,
+  };
 }
 
 function eligibleFailureReason(
@@ -390,7 +593,7 @@ function actionAffordances(
             const instrument = methodFor[candidate.category];
             return (
               expedition.instruments.includes(instrument) &&
-              (expedition.instrumentCharges[instrument] ?? 0) > 0
+              (expedition.instrumentCharges[instrument]?.current ?? 0) > 0
             );
           })
           .sort((a, b) =>
@@ -492,17 +695,39 @@ export function applyCommand(
     if (state.phase !== "idle" && state.phase !== "failed") return reject(state, "wrong-phase");
     if (state.driftDue) return reject(state, "drift-required");
     if (new Set(command.instruments).size !== 2) return reject(state, "invalid-loadout");
+    const offer = generateCommissionOffers(state, scenario).find(
+      (candidate) => candidate.id === command.commissionId,
+    );
+    if (!offer) return reject(state, "commission-unavailable");
+    if ("requiredInstrument" in offer && !command.instruments.includes(offer.requiredInstrument))
+      return reject(state, "commission-incompatible-loadout");
+    const extraCharges = command.preparation.extraChargeInstruments;
+    if (
+      command.preparation.extraProvisions < 0 ||
+      command.preparation.extraProvisions > 2 ||
+      new Set(extraCharges).size !== extraCharges.length ||
+      extraCharges.some((instrument) => !command.instruments.includes(instrument))
+    )
+      return reject(state, "invalid-preparation");
+    const cost = preparationCost(command.preparation);
+    if (state.bankedFindings < cost) return reject(state, "insufficient-findings");
     next.expeditionSequence += 1;
+    next.bankedFindings -= cost;
     next.phase = "expedition";
     next.expedition = {
       id: `expedition-${next.expeditionSequence}`,
       instruments: [...command.instruments].sort(compareCodeUnits),
-      provisions: BASE_PROVISIONS,
-      maximumProvisions: BASE_PROVISIONS,
-      vesselIntegrity: BASE_VESSEL_INTEGRITY,
-      maximumVesselIntegrity: BASE_VESSEL_INTEGRITY,
+      provisions: BASE_PROVISIONS + command.preparation.extraProvisions,
+      maximumProvisions: BASE_PROVISIONS + command.preparation.extraProvisions,
+      vesselIntegrity:
+        BASE_VESSEL_INTEGRITY + Number(command.preparation.reinforcedVesselIntegrity),
+      maximumVesselIntegrity:
+        BASE_VESSEL_INTEGRITY + Number(command.preparation.reinforcedVesselIntegrity),
       instrumentCharges: Object.fromEntries(
-        command.instruments.map((instrument) => [instrument, BASE_INSTRUMENT_CHARGES]),
+        command.instruments.map((instrument) => {
+          const maximum = BASE_INSTRUMENT_CHARGES + Number(extraCharges.includes(instrument));
+          return [instrument, { current: maximum, maximum }];
+        }),
       ),
       locationId: scenario.waystationId,
       previousLocationId: null,
@@ -511,6 +736,17 @@ export function applyCommand(
       travelCount: 0,
       unbankedFindings: 0,
       salvagedOpportunityIds: [],
+      commission: structuredClone(offer),
+      commissionProgress: {
+        status: "active",
+        targetVisited: false,
+        matchingObservationRecorded: false,
+        targetSalvageRecovered: false,
+        requiredReportPublished: false,
+        findingsRewardGranted: false,
+      },
+      preparation: structuredClone(command.preparation),
+      preparationFindingsSpent: cost,
     };
     return {
       ok: true,
@@ -519,6 +755,8 @@ export function applyCommand(
         snapshotEvent(next, "expedition-started", {
           expeditionId: next.expedition.id,
           instruments: next.expedition.instruments,
+          commissionId: offer.id,
+          preparationFindingsSpent: cost,
         }),
       ],
     };
@@ -541,6 +779,12 @@ export function applyCommand(
     mutable.previousLocationId = mutable.locationId;
     mutable.locationId = target;
     mutable.visited.push(target);
+    if (
+      mutable.commission.family === "reach-frontier" &&
+      mutable.commission.targetLocationId === target
+    )
+      mutable.commissionProgress.targetVisited = true;
+    updateObjectiveStatus(mutable);
     if (damaged) mutable.vesselIntegrity -= 1;
     const traversal = snapshotEvent(next, "route-traversed", {
       routeId: route.id,
@@ -575,7 +819,7 @@ export function applyCommand(
     if (applicability === "invalid") return reject(state, "invalid-observation-subject");
     const instrument = methodFor[command.category];
     if (!expedition.instruments.includes(instrument)) return reject(state, "instrument-required");
-    if ((expedition.instrumentCharges[instrument] ?? 0) < 1)
+    if ((expedition.instrumentCharges[instrument]?.current ?? 0) < 1)
       return reject(state, "instrument-depleted");
     const observation: ObservationRecord = {
       id: `observation-${expedition.id}-${expedition.observations.length + 1}`,
@@ -588,9 +832,16 @@ export function applyCommand(
       method: methodFor[command.category],
       quality: "high",
     };
-    next.expedition!.instrumentCharges[instrument] =
-      next.expedition!.instrumentCharges[instrument]! - 1;
+    next.expedition!.instrumentCharges[instrument]!.current -= 1;
     next.expedition!.observations.push(observation);
+    const commission = next.expedition!.commission;
+    if (
+      (commission.family === "survey" || commission.family === "verify-report") &&
+      commission.subjectId === observation.subjectId &&
+      commission.category === observation.category
+    )
+      next.expedition!.commissionProgress.matchingObservationRecorded = true;
+    updateObjectiveStatus(next.expedition!);
     return {
       ok: true,
       state: next,
@@ -636,6 +887,12 @@ export function applyCommand(
       next.expedition!.vesselIntegrity += appliedValue;
     }
     next.expedition!.salvagedOpportunityIds.push(node.id);
+    if (
+      next.expedition!.commission.family === "recover-salvage" &&
+      next.expedition!.commission.targetLocationId === node.id
+    )
+      next.expedition!.commissionProgress.targetSalvageRecovered = true;
+    updateObjectiveStatus(next.expedition!);
     return {
       ok: true,
       state: next,
@@ -666,6 +923,17 @@ export function applyCommand(
     next.personalObservations.push(...expedition.observations);
     next.resolvedExpeditions += 1;
     next.driftDue = next.driftDue || next.resolvedExpeditions % 3 === 0;
+    let commissionFindings = 0;
+    if (
+      expedition.commission.family !== "verify-report" &&
+      objectiveMet(expedition) &&
+      !next.expedition!.commissionProgress.findingsRewardGranted
+    ) {
+      commissionFindings = expedition.commission.findingsReward;
+      next.bankedFindings += commissionFindings;
+      next.expedition!.commissionProgress.findingsRewardGranted = true;
+      next.expedition!.commissionProgress.status = "completed";
+    }
     return {
       ok: true,
       state: next,
@@ -673,6 +941,7 @@ export function applyCommand(
         snapshotEvent(next, "expedition-returned", {
           bankedFindings,
           observationIds: expedition.observations.map((item) => item.id),
+          commissionFindings,
         }),
       ],
     };
@@ -710,6 +979,23 @@ export function applyCommand(
       publishedAt: next.logicalTime,
     }));
     next.reports.push(...reports);
+    next.atlasContribution += reports.length;
+    const commission = next.expedition!.commission;
+    if (commission.family === "verify-report") {
+      const matchingPublished = eligible.some(
+        (item) => item?.subjectId === commission.subjectId && item.category === commission.category,
+      );
+      if (matchingPublished && next.expedition!.commissionProgress.matchingObservationRecorded) {
+        next.expedition!.commissionProgress.requiredReportPublished = true;
+        next.expedition!.commissionProgress.findingsRewardGranted = true;
+        next.expedition!.commissionProgress.status = "completed";
+        next.bankedFindings += commission.findingsReward;
+      }
+    }
+    next.previousCommissionResult = previousResult(
+      next.expedition!,
+      next.expedition!.commissionProgress.status === "completed" ? "success" : "incomplete",
+    );
     next.expedition = null;
     next.phase = "idle";
     return {
@@ -718,6 +1004,7 @@ export function applyCommand(
       events: [
         snapshotEvent(next, "reports-published", {
           reportIds: reports.map((item) => item.reportId),
+          atlasContributionAdded: reports.length,
         }),
       ],
     };
@@ -797,6 +1084,9 @@ function fail(
   state.driftDue = state.driftDue || state.resolvedExpeditions % 3 === 0;
   expedition.vesselIntegrity = reason === "vessel-integrity" ? 0 : expedition.vesselIntegrity;
   expedition.unbankedFindings = 0;
+  expedition.commissionProgress.status = "failed";
+  expedition.commissionProgress.findingsRewardGranted = false;
+  state.previousCommissionResult = previousResult(expedition, "failure");
 }
 export function evolveFromEvent(_state: CanonicalState, domainEvent: DomainEvent): CanonicalState {
   const snapshot = domainEvent.payload["canonicalState"];
@@ -888,15 +1178,7 @@ export function createPlayerProjection(
   const observations = new Map<StableId, ObservationRecord>();
   for (const item of [...state.personalObservations, ...(expedition?.observations ?? [])])
     observations.set(item.id, item);
-  const atlas: AtlasClaim[] = state.reports.map((report) => ({
-    ...report,
-    age: state.logicalTime - report.observedAt,
-    potentiallyStale:
-      (state.world.subjectLastChangedRevision[report.subjectId] ?? 0) > report.observedRevision,
-    independentCorroboration: new Set(
-      compatibleReports(report, state.reports).map((item) => item.expeditionId),
-    ).size,
-  }));
+  const atlas: AtlasClaim[] = state.reports.map((report) => reportClaim(state, report));
   const returnReserve = expedition ? calculateReturnReserve(state, location, scenario) : null;
   const provisionMargin =
     expedition && returnReserve !== null ? expedition.provisions - returnReserve : null;
@@ -926,7 +1208,25 @@ export function createPlayerProjection(
       baseVesselIntegrity: BASE_VESSEL_INTEGRITY,
       baseChargesPerSelectedInstrument: BASE_INSTRUMENT_CHARGES,
       bankedFindings: state.bankedFindings,
+      atlasContribution: state.atlasContribution,
     },
+    commissionOffers: generateCommissionOffers(state, scenario),
+    activeCommission: expedition
+      ? {
+          offer: structuredClone(expedition.commission),
+          progress: structuredClone(expedition.commissionProgress),
+        }
+      : null,
+    preparationCatalog: {
+      extraProvisionCost: 1,
+      maximumExtraProvisions: 2,
+      reinforcedVesselIntegrityCost: 2,
+      maximumReinforcedVesselIntegrity: 1,
+      extraChargeCost: 1,
+      maximumExtraChargePerInstrument: 1,
+      bankedFindings: state.bankedFindings,
+    },
+    previousCommissionResult: structuredClone(state.previousCommissionResult),
     expeditionResources: expedition
       ? {
           provisions: expedition.provisions,
@@ -935,8 +1235,8 @@ export function createPlayerProjection(
           maximumVesselIntegrity: expedition.maximumVesselIntegrity,
           instrumentCharges: expedition.instruments.map((instrument) => ({
             instrument,
-            remaining: expedition.instrumentCharges[instrument] ?? 0,
-            maximum: BASE_INSTRUMENT_CHARGES,
+            remaining: expedition.instrumentCharges[instrument]?.current ?? 0,
+            maximum: expedition.instrumentCharges[instrument]?.maximum ?? 0,
           })),
           returnReserve,
           provisionMargin,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 2 as const;
+export const PROTOCOL_VERSION = 3 as const;
 const stableId = z.string().regex(/^[a-z][a-z0-9-]{0,63}$/);
 export const StableIdSchema = stableId;
 export type StableId = z.infer<typeof StableIdSchema>;
@@ -20,11 +20,67 @@ export type EvidenceQuality = z.infer<typeof EvidenceQualitySchema>;
 export const SourceClassSchema = z.enum(["player", "baseline", "synthetic"]);
 export type SourceClass = z.infer<typeof SourceClassSchema>;
 
+export const PreparationPlanSchema = z.object({
+  extraProvisions: z.number().int().min(0).max(2),
+  reinforcedVesselIntegrity: z.boolean(),
+  extraChargeInstruments: z.array(InstrumentSchema).max(2),
+});
+export type PreparationPlan = z.infer<typeof PreparationPlanSchema>;
+
+const commissionBase = z.object({
+  id: stableId,
+  findingsReward: z.number().int().nonnegative(),
+  publicationRequired: z.boolean(),
+});
+export const CommissionOfferSchema = z.discriminatedUnion("family", [
+  commissionBase.extend({
+    family: z.literal("verify-report"),
+    findingsReward: z.literal(3),
+    publicationRequired: z.literal(true),
+    reportId: stableId,
+    subjectId: stableId,
+    category: ObservationCategorySchema,
+    requiredInstrument: InstrumentSchema,
+  }),
+  commissionBase.extend({
+    family: z.literal("survey"),
+    findingsReward: z.literal(2),
+    publicationRequired: z.literal(false),
+    subjectId: stableId,
+    category: ObservationCategorySchema,
+    requiredInstrument: InstrumentSchema,
+  }),
+  commissionBase.extend({
+    family: z.literal("reach-frontier"),
+    findingsReward: z.literal(3),
+    publicationRequired: z.literal(false),
+    targetLocationId: stableId,
+  }),
+  commissionBase.extend({
+    family: z.literal("recover-salvage"),
+    findingsReward: z.literal(2),
+    publicationRequired: z.literal(false),
+    targetLocationId: stableId,
+  }),
+]);
+export type CommissionOffer = z.infer<typeof CommissionOfferSchema>;
+export const CommissionProgressSchema = z.object({
+  status: z.enum(["active", "objective-met", "completed", "failed"]),
+  targetVisited: z.boolean(),
+  matchingObservationRecorded: z.boolean(),
+  targetSalvageRecovered: z.boolean(),
+  requiredReportPublished: z.boolean(),
+  findingsRewardGranted: z.boolean(),
+});
+export type CommissionProgress = z.infer<typeof CommissionProgressSchema>;
+
 const commandBase = z.object({ protocolVersion: z.literal(PROTOCOL_VERSION), commandId: stableId });
 export const PlayerCommandSchema = z.discriminatedUnion("kind", [
   commandBase.extend({
     kind: z.literal("start-expedition"),
     instruments: z.array(InstrumentSchema).length(2),
+    commissionId: stableId,
+    preparation: PreparationPlanSchema,
   }),
   commandBase.extend({ kind: z.literal("travel"), routeId: stableId }),
   commandBase.extend({
@@ -50,6 +106,10 @@ export const RejectionReasonSchema = z.enum([
   "wrong-phase",
   "drift-required",
   "invalid-loadout",
+  "commission-unavailable",
+  "commission-incompatible-loadout",
+  "invalid-preparation",
+  "insufficient-findings",
   "route-unavailable",
   "insufficient-provisions",
   "instrument-required",
@@ -166,6 +226,34 @@ export interface WaystationBaseline {
   baseVesselIntegrity: number;
   baseChargesPerSelectedInstrument: number;
   bankedFindings: number;
+  atlasContribution: number;
+}
+export interface ActiveCommission {
+  offer: CommissionOffer;
+  progress: CommissionProgress;
+}
+export interface PreparationCatalog {
+  extraProvisionCost: 1;
+  maximumExtraProvisions: 2;
+  reinforcedVesselIntegrityCost: 2;
+  maximumReinforcedVesselIntegrity: 1;
+  extraChargeCost: 1;
+  maximumExtraChargePerInstrument: 1;
+  bankedFindings: number;
+}
+export interface PreviousCommissionResult {
+  commissionId: StableId;
+  family: CommissionOffer["family"];
+  result: "success" | "failure" | "incomplete";
+  objectiveMet: boolean;
+  findingsRewardOffered: number;
+  findingsRewardGranted: number;
+  publicationRequired: boolean;
+  requiredPublicationOccurred: boolean;
+  preparationFindingsSpent: number;
+  subjectId?: StableId;
+  targetLocationId?: StableId;
+  expeditionId: StableId;
 }
 export interface PlayerSafeProjection {
   protocolVersion: typeof PROTOCOL_VERSION;
@@ -176,6 +264,10 @@ export interface PlayerSafeProjection {
   phase: "idle" | "expedition" | "returned" | "failed";
   locationId: StableId;
   waystation: WaystationBaseline;
+  commissionOffers: CommissionOffer[];
+  activeCommission: ActiveCommission | null;
+  preparationCatalog: PreparationCatalog;
+  previousCommissionResult: PreviousCommissionResult | null;
   expeditionResources: ActiveExpeditionResources | null;
   selectedInstruments: Instrument[];
   knownRoutes: SafeRouteDescriptor[];

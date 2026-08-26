@@ -12,6 +12,7 @@ import {
   PROTOCOL_VERSION,
   PlayerCommandSchema,
   type DomainEvent,
+  type Instrument,
   type PlayerCommand,
   type PlayerSafeProjection,
   type ReplayRecord,
@@ -36,6 +37,12 @@ export interface RunMetrics {
   salvageFamilyOutcomes: Record<"findings-cache" | "provision-cache" | "repair-material", number>;
   returnReserveWarningsEncountered: Record<string, number>;
   reports: number;
+  commissionFamily: string | null;
+  commissionCompleted: boolean;
+  commissionFindingsGranted: number;
+  atlasContribution: number;
+  preparationFindingsSpent: number;
+  selectedPreparationCount: number;
   checksum: string;
   replay: ReplayRecord;
 }
@@ -55,6 +62,12 @@ export interface Aggregate {
   averageObservationsCreated: number;
   averageChargesConsumed: number;
   averageReportsPublished: number;
+  commissionFamilySelections: Record<string, number>;
+  commissionCompletionRate: number;
+  averageCommissionFindingsGranted: number;
+  averageAtlasContribution: number;
+  averagePreparationFindingsSpent: number;
+  averageSelectedPreparationCount: number;
   salvageFamilyOutcomes: Record<"findings-cache" | "provision-cache" | "repair-material", number>;
   returnReserveWarningsEncountered: Record<string, number>;
   terminalChecksumSummary: string;
@@ -144,7 +157,22 @@ export function legalCommands(view: PlayerSafeProjection, sequence: number): Pla
   }
   if (view.actions.canAdvanceDrift) add("advance-drift");
   if (view.actions.canStartExpedition)
-    add("start-expedition", { instruments: ["sounding-line", "weather-glass"] });
+    for (const offer of view.commissionOffers) {
+      const instruments: Instrument[] = [];
+      if ("requiredInstrument" in offer) instruments.push(offer.requiredInstrument);
+      for (const instrument of ["sounding-line", "weather-glass", "field-lens"] as Instrument[])
+        if (!instruments.includes(instrument) && instruments.length < 2)
+          instruments.push(instrument);
+      add("start-expedition", {
+        instruments,
+        commissionId: offer.id,
+        preparation: {
+          extraProvisions: 0,
+          reinforcedVesselIntegrity: false,
+          extraChargeInstruments: [],
+        },
+      });
+    }
   for (const routeId of view.actions.traversableRouteIds) add("travel", { routeId });
   for (const observation of view.actions.observations) add("observe", observation);
   for (const opportunity of view.actions.salvageableOpportunities)
@@ -218,8 +246,56 @@ function chooseCommand(
     (item): item is Extract<PlayerCommand, { kind: "travel" }> => item.kind === "travel",
   );
   const resources = view.expeditionResources;
+  const starts = legal.filter(
+    (item): item is Extract<PlayerCommand, { kind: "start-expedition" }> =>
+      item.kind === "start-expedition",
+  );
+  if (starts.length) {
+    if (policy === "random") return starts[random % starts.length]!;
+    const preferred =
+      policy === "aggressive"
+        ? ["reach-frontier"]
+        : policy === "surveyor"
+          ? ["verify-report", "survey"]
+          : ["recover-salvage", "survey"];
+    for (const family of preferred) {
+      const match = starts.find(
+        (item) =>
+          view.commissionOffers.find((offer) => offer.id === item.commissionId)?.family === family,
+      );
+      if (match) return match;
+    }
+    return starts[0]!;
+  }
 
   if (policy === "random") return legal[random % legal.length]!;
+
+  const commission = view.activeCommission?.offer;
+  if (
+    policy === "surveyor" &&
+    commission &&
+    (commission.family === "verify-report" || commission.family === "survey")
+  ) {
+    const matching = legal.find(
+      (item) =>
+        item.kind === "observe" &&
+        item.subjectId === commission.subjectId &&
+        item.category === commission.category,
+    );
+    if (matching) return matching;
+  }
+  if (commission?.family === "recover-salvage") {
+    const salvage = legal.find(
+      (item) => item.kind === "salvage" && item.opportunityId === commission.targetLocationId,
+    );
+    if (salvage) return salvage;
+    const toward = routeToward(view, legal, commission.targetLocationId);
+    if (toward && policy === "cautious") return toward;
+  }
+  if (commission?.family === "reach-frontier" && policy === "aggressive") {
+    const toward = routeToward(view, legal, commission.targetLocationId);
+    if (toward) return toward;
+  }
 
   if (policy === "surveyor") {
     const observed = new Set(view.observations.map((item) => `${item.subjectId}:${item.category}`));
@@ -360,6 +436,12 @@ export function runExpedition(policy: PolicyName, seed: number, stepLimit = 40):
     steps >= stepLimit && state.phase !== "failed" && !(state.phase === "idle" && published);
   const terminalChecksum = checksum(serializeCanonicalState(state));
   const playerReports = state.reports.filter((item) => item.sourceClass === "player").length;
+  const startCommand = commands.find(
+    (item): item is Extract<PlayerCommand, { kind: "start-expedition" }> =>
+      item.kind === "start-expedition",
+  );
+  const result = state.previousCommissionResult;
+  const active = state.expedition;
   const salvageFamilyOutcomes = {
     "findings-cache": 0,
     "provision-cache": 0,
@@ -387,6 +469,18 @@ export function runExpedition(policy: PolicyName, seed: number, stepLimit = 40):
     salvageFamilyOutcomes,
     returnReserveWarningsEncountered,
     reports: playerReports,
+    commissionFamily: result?.family ?? active?.commission.family ?? null,
+    commissionCompleted:
+      result?.result === "success" || active?.commissionProgress.status === "completed",
+    commissionFindingsGranted: result?.findingsRewardGranted ?? 0,
+    atlasContribution: state.atlasContribution,
+    preparationFindingsSpent:
+      result?.preparationFindingsSpent ?? active?.preparationFindingsSpent ?? 0,
+    selectedPreparationCount: startCommand
+      ? startCommand.preparation.extraProvisions +
+        Number(startCommand.preparation.reinforcedVesselIntegrity) +
+        startCommand.preparation.extraChargeInstruments.length
+      : 0,
     checksum: terminalChecksum,
     replay: {
       protocolVersion: PROTOCOL_VERSION,
@@ -427,6 +521,16 @@ export function smokeStudy(count = 100): Aggregate[] {
       averageObservationsCreated: average((run) => run.observations),
       averageChargesConsumed: average((run) => run.chargesConsumed),
       averageReportsPublished: average((run) => run.reports),
+      commissionFamilySelections: runs.reduce<Record<string, number>>((totals, run) => {
+        if (run.commissionFamily)
+          totals[run.commissionFamily] = (totals[run.commissionFamily] ?? 0) + 1;
+        return totals;
+      }, {}),
+      commissionCompletionRate: average((run) => Number(run.commissionCompleted)),
+      averageCommissionFindingsGranted: average((run) => run.commissionFindingsGranted),
+      averageAtlasContribution: average((run) => run.atlasContribution),
+      averagePreparationFindingsSpent: average((run) => run.preparationFindingsSpent),
+      averageSelectedPreparationCount: average((run) => run.selectedPreparationCount),
       salvageFamilyOutcomes: runs.reduce(
         (totals, run) => {
           for (const family of Object.keys(totals) as Array<keyof typeof totals>)

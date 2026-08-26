@@ -23,6 +23,12 @@ const start: PlayerCommand = {
   commandId: "test-start",
   kind: "start-expedition",
   instruments: ["sounding-line", "weather-glass"],
+  commissionId: "commission-survey",
+  preparation: {
+    extraProvisions: 0,
+    reinforcedVesselIntegrity: false,
+    extraChargeInstruments: [],
+  },
 };
 
 function accepted(state: CanonicalState, command: PlayerCommand): CanonicalState {
@@ -37,19 +43,19 @@ describe("player-safe action contract", () => {
     const initial = createInitialState(31);
     const begun = accepted(initial, start);
     const departed = accepted(begun, {
-      protocolVersion: 2,
+      protocolVersion: 3,
       commandId: "test-depart",
       kind: "travel",
       routeId: "r-hs",
     });
     const returnedHome = accepted(departed, {
-      protocolVersion: 2,
+      protocolVersion: 3,
       commandId: "test-home",
       kind: "travel",
       routeId: "r-hs",
     });
     const resolved = accepted(returnedHome, {
-      protocolVersion: 2,
+      protocolVersion: 3,
       commandId: "test-resolve",
       kind: "resolve-return",
     });
@@ -78,6 +84,72 @@ describe("player-safe action contract", () => {
         failureReason: "stranded",
       });
     }
+  });
+});
+
+describe("two-Expedition preparation proof", () => {
+  it("earns Commission Findings, spends one, and starts with a higher maximum", () => {
+    let state = createInitialState(20260804);
+    state = accepted(state, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "proof-start-one",
+      kind: "start-expedition",
+      instruments: ["field-lens", "sounding-line"],
+      commissionId: "commission-salvage",
+      preparation: {
+        extraProvisions: 0,
+        reinforcedVesselIntegrity: false,
+        extraChargeInstruments: [],
+      },
+    });
+    state = accepted(state, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "proof-out",
+      kind: "travel",
+      routeId: "r-hs",
+    });
+    state = accepted(state, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "proof-salvage",
+      kind: "salvage",
+      opportunityId: "shoal",
+    });
+    state = accepted(state, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "proof-home",
+      kind: "travel",
+      routeId: "r-hs",
+    });
+    state = accepted(state, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "proof-return",
+      kind: "resolve-return",
+    });
+    state = accepted(state, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "proof-publish",
+      kind: "publish-reports",
+      observationIds: [],
+    });
+    expect(state.bankedFindings).toBe(2);
+    state = accepted(state, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "proof-start-two",
+      kind: "start-expedition",
+      instruments: ["field-lens", "sounding-line"],
+      commissionId: "commission-salvage",
+      preparation: {
+        extraProvisions: 1,
+        reinforcedVesselIntegrity: false,
+        extraChargeInstruments: [],
+      },
+    });
+    expect(state.bankedFindings).toBe(1);
+    expect(state.expedition).toMatchObject({
+      provisions: 9,
+      maximumProvisions: 9,
+      preparationFindingsSpent: 1,
+    });
   });
 });
 
@@ -149,7 +221,7 @@ describe("headless simulation", () => {
   it("surfaces command-stream rejection context", () => {
     const replay = replayCommands(1, [
       {
-        protocolVersion: 2,
+        protocolVersion: 3,
         commandId: "invalid-replay-return",
         kind: "resolve-return",
       },
