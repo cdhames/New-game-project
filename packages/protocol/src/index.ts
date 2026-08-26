@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 1 as const;
+export const PROTOCOL_VERSION = 2 as const;
 const stableId = z.string().regex(/^[a-z][a-z0-9-]{0,63}$/);
 export const StableIdSchema = stableId;
 export type StableId = z.infer<typeof StableIdSchema>;
@@ -36,7 +36,7 @@ export const PlayerCommandSchema = z.discriminatedUnion("kind", [
   commandBase.extend({ kind: z.literal("resolve-return") }),
   commandBase.extend({
     kind: z.literal("resolve-failure"),
-    reason: z.enum(["stranded", "integrity"]),
+    reason: z.enum(["stranded", "vessel-integrity"]),
   }),
   commandBase.extend({
     kind: z.literal("publish-reports"),
@@ -51,8 +51,9 @@ export const RejectionReasonSchema = z.enum([
   "drift-required",
   "invalid-loadout",
   "route-unavailable",
-  "insufficient-supply",
+  "insufficient-provisions",
   "instrument-required",
+  "instrument-depleted",
   "subject-not-local",
   "invalid-observation-subject",
   "opportunity-unavailable",
@@ -86,7 +87,7 @@ export interface TraceRecord {
   id: StableId;
   expeditionId: StableId;
   associationId: StableId;
-  recoverableReward: number;
+  recoverableFindings: number;
   observationIds: StableId[];
 }
 export interface AtlasClaim extends ReportRecord {
@@ -101,18 +102,80 @@ export const ObservationAffordanceSchema = z.object({
   category: ObservationCategorySchema,
 });
 export type ObservationAffordance = z.infer<typeof ObservationAffordanceSchema>;
+export const ActionAvailabilityReasonSchema = z.enum([
+  "available",
+  "expedition-not-underway",
+  "no-known-route",
+  "insufficient-provisions",
+  "no-applicable-observation",
+  "instrument-not-selected",
+  "instrument-depleted",
+  "no-salvage-opportunity",
+  "not-at-waystation",
+  "return-not-earned",
+  "safe-return-available",
+]);
+export type ActionAvailabilityReason = z.infer<typeof ActionAvailabilityReasonSchema>;
+export const SalvageFamilySchema = z.enum([
+  "findings-cache",
+  "provision-cache",
+  "repair-material",
+]);
+export type SalvageFamily = z.infer<typeof SalvageFamilySchema>;
+export const SafeSalvageDescriptorSchema = z.object({
+  opportunityId: stableId,
+  locationId: stableId,
+  family: SalvageFamilySchema,
+});
+export type SafeSalvageDescriptor = z.infer<typeof SafeSalvageDescriptorSchema>;
 export const ActionAffordancesSchema = z.object({
   traversableRouteIds: z.array(stableId),
   observations: z.array(ObservationAffordanceSchema),
-  salvageableOpportunityIds: z.array(stableId),
+  salvageableOpportunities: z.array(SafeSalvageDescriptorSchema),
   canResolveReturn: z.boolean(),
-  failureReason: z.enum(["stranded", "integrity"]).nullable(),
+  failureReason: z.enum(["stranded", "vessel-integrity"]).nullable(),
   publicationEligibleObservationIds: z.array(stableId),
   publicationRequired: z.boolean(),
   canAdvanceDrift: z.boolean(),
   canStartExpedition: z.boolean(),
+  availability: z.object({
+    travel: ActionAvailabilityReasonSchema,
+    observe: ActionAvailabilityReasonSchema,
+    salvage: ActionAvailabilityReasonSchema,
+    return: ActionAvailabilityReasonSchema,
+    failure: ActionAvailabilityReasonSchema,
+  }),
 });
 export type ActionAffordances = z.infer<typeof ActionAffordancesSchema>;
+export interface InstrumentChargeState {
+  instrument: Instrument;
+  remaining: number;
+  maximum: number;
+}
+export type ReturnReserveWarning =
+  | "at-waystation"
+  | "comfortable"
+  | "caution"
+  | "at-reserve"
+  | "below-reserve"
+  | "route-unknown";
+export interface ActiveExpeditionResources {
+  provisions: number;
+  maximumProvisions: number;
+  vesselIntegrity: number;
+  maximumVesselIntegrity: number;
+  instrumentCharges: InstrumentChargeState[];
+  returnReserve: number | null;
+  provisionMargin: number | null;
+  returnReserveWarning: ReturnReserveWarning;
+  unbankedFindings: number;
+}
+export interface WaystationBaseline {
+  baseProvisions: number;
+  baseVesselIntegrity: number;
+  baseChargesPerSelectedInstrument: number;
+  bankedFindings: number;
+}
 export interface PlayerSafeProjection {
   protocolVersion: typeof PROTOCOL_VERSION;
   scenarioVersion: ScenarioVersion;
@@ -121,8 +184,8 @@ export interface PlayerSafeProjection {
   driftDue: boolean;
   phase: "idle" | "expedition" | "returned" | "failed";
   locationId: StableId;
-  supply: number;
-  integrity: number;
+  waystation: WaystationBaseline;
+  expeditionResources: ActiveExpeditionResources | null;
   selectedInstruments: Instrument[];
   knownRoutes: SafeRouteDescriptor[];
   knownNodeIds: StableId[];
@@ -132,8 +195,6 @@ export interface PlayerSafeProjection {
   observations: ObservationRecord[];
   atlas: AtlasClaim[];
   traces: TraceRecord[];
-  bankedReward: number;
-  unbankedReward: number;
 }
 
 export interface DomainEvent {

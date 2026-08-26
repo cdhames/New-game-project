@@ -27,8 +27,14 @@ export interface RunMetrics {
   rejectedCommandCount: number;
   steps: number;
   maxDepth: number;
-  bankedReward: number;
+  provisions: number;
+  vesselIntegrity: number;
+  bankedFindings: number;
+  unbankedFindings: number;
   observations: number;
+  chargesConsumed: number;
+  salvageFamilyOutcomes: Record<"findings-cache" | "provision-cache" | "repair-material", number>;
+  returnReserveWarningsEncountered: Record<string, number>;
   reports: number;
   checksum: string;
   replay: ReplayRecord;
@@ -42,9 +48,15 @@ export interface Aggregate {
   rejectedCommandCount: number;
   averageDecisionSteps: number;
   averageFrontierDepth: number;
-  averagePersonalRewardBanked: number;
+  averageTerminalProvisions: number;
+  averageTerminalVesselIntegrity: number;
+  averageBankedFindings: number;
+  averageUnbankedFindings: number;
   averageObservationsCreated: number;
+  averageChargesConsumed: number;
   averageReportsPublished: number;
+  salvageFamilyOutcomes: Record<"findings-cache" | "provision-cache" | "repair-material", number>;
+  returnReserveWarningsEncountered: Record<string, number>;
   terminalChecksumSummary: string;
 }
 export interface CommandReplaySuccess {
@@ -69,7 +81,7 @@ type SimulationInvariantContext =
       phase: PlayerSafeProjection["phase"];
       locationId: StableId;
       canResolveReturn: true;
-      failureReason: "stranded" | "integrity";
+      failureReason: "stranded" | "vessel-integrity";
     }
   | {
       kind: "command-rejection";
@@ -135,8 +147,8 @@ export function legalCommands(view: PlayerSafeProjection, sequence: number): Pla
     add("start-expedition", { instruments: ["sounding-line", "weather-glass"] });
   for (const routeId of view.actions.traversableRouteIds) add("travel", { routeId });
   for (const observation of view.actions.observations) add("observe", observation);
-  for (const opportunityId of view.actions.salvageableOpportunityIds)
-    add("salvage", { opportunityId });
+  for (const opportunity of view.actions.salvageableOpportunities)
+    add("salvage", { opportunityId: opportunity.opportunityId });
   if (view.actions.canResolveReturn) add("resolve-return");
   if (view.actions.failureReason) add("resolve-failure", { reason: view.actions.failureReason });
   return commands;
@@ -205,6 +217,7 @@ function chooseCommand(
   const travels = legal.filter(
     (item): item is Extract<PlayerCommand, { kind: "travel" }> => item.kind === "travel",
   );
+  const resources = view.expeditionResources;
 
   if (policy === "random") return legal[random % legal.length]!;
 
@@ -216,16 +229,22 @@ function chooseCommand(
         !observed.has(`${item.subjectId}:${item.category}`) &&
         item.category !== "opportunity",
     );
-    if (survey && view.supply > 3 && view.integrity > 1) return survey;
+    if (survey && resources && (resources.provisionMargin ?? -1) >= 1 && resources.vesselIntegrity > 1)
+      return survey;
     if (resolveReturn) return resolveReturn;
-    if (view.supply <= 3 || view.integrity <= 1)
+    if (resources && ((resources.provisionMargin ?? -1) <= 0 || resources.vesselIntegrity <= 1))
       return routeToward(view, legal, waystationId) ?? travels[0]!;
     return travels[0] ?? legal[0]!;
   }
 
   if (policy === "cautious") {
-    if (resolveReturn && (view.supply <= 4 || view.integrity <= 2)) return resolveReturn;
-    if (view.supply <= 4 || view.integrity <= 2)
+    if (
+      resolveReturn &&
+      resources &&
+      ((resources.provisionMargin ?? -1) <= 1 || resources.vesselIntegrity <= 2)
+    )
+      return resolveReturn;
+    if (resources && ((resources.provisionMargin ?? -1) <= 1 || resources.vesselIntegrity <= 2))
       return routeToward(view, legal, waystationId) ?? travels[0]!;
     return travels[0] ?? resolveReturn ?? legal[0]!;
   }
@@ -282,9 +301,15 @@ export function runExpedition(policy: PolicyName, seed: number, stepLimit = 40):
   let policyRng = { value: (seed ^ 0x9e3779b9) >>> 0 };
   const waystationId = createPlayerProjection(initial).locationId;
   let published = false;
+  const returnReserveWarningsEncountered: Record<string, number> = {};
 
   while (steps < stepLimit) {
     const view = createPlayerProjection(state);
+    if (view.expeditionResources) {
+      const warning = view.expeditionResources.returnReserveWarning;
+      returnReserveWarningsEncountered[warning] =
+        (returnReserveWarningsEncountered[warning] ?? 0) + 1;
+    }
     maxDepth = Math.max(maxDepth, graphDistances(view, waystationId).get(view.locationId) ?? 0);
     if (state.phase === "failed" || (state.phase === "idle" && published)) break;
     const legal = legalCommands(view, steps + 1);
@@ -324,6 +349,18 @@ export function runExpedition(policy: PolicyName, seed: number, stepLimit = 40):
     steps >= stepLimit && state.phase !== "failed" && !(state.phase === "idle" && published);
   const terminalChecksum = checksum(serializeCanonicalState(state));
   const playerReports = state.reports.filter((item) => item.sourceClass === "player").length;
+  const terminalExpedition = state.expedition;
+  const salvageFamilyOutcomes = {
+    "findings-cache": 0,
+    "provision-cache": 0,
+    "repair-material": 0,
+  };
+  for (const domainEvent of events) {
+    if (domainEvent.kind !== "opportunity-salvaged") continue;
+    const family = domainEvent.payload["family"];
+    if (family === "findings-cache" || family === "provision-cache" || family === "repair-material")
+      salvageFamilyOutcomes[family] += 1;
+  }
   return {
     completedFullLoop: state.phase === "idle" && published && !timedOut,
     failed: state.phase === "failed",
@@ -331,8 +368,14 @@ export function runExpedition(policy: PolicyName, seed: number, stepLimit = 40):
     rejectedCommandCount,
     steps,
     maxDepth,
-    bankedReward: state.bankedReward,
+    provisions: terminalExpedition?.provisions ?? 0,
+    vesselIntegrity: terminalExpedition?.vesselIntegrity ?? 0,
+    bankedFindings: state.bankedFindings,
+    unbankedFindings: terminalExpedition?.unbankedFindings ?? 0,
     observations: state.personalObservations.length,
+    chargesConsumed: commands.filter((item) => item.kind === "observe").length,
+    salvageFamilyOutcomes,
+    returnReserveWarningsEncountered,
     reports: playerReports,
     checksum: terminalChecksum,
     replay: {
@@ -361,9 +404,26 @@ export function smokeStudy(count = 100): Aggregate[] {
       rejectedCommandCount: runs.reduce((total, run) => total + run.rejectedCommandCount, 0),
       averageDecisionSteps: average((run) => run.steps),
       averageFrontierDepth: average((run) => run.maxDepth),
-      averagePersonalRewardBanked: average((run) => run.bankedReward),
+      averageTerminalProvisions: average((run) => run.provisions),
+      averageTerminalVesselIntegrity: average((run) => run.vesselIntegrity),
+      averageBankedFindings: average((run) => run.bankedFindings),
+      averageUnbankedFindings: average((run) => run.unbankedFindings),
       averageObservationsCreated: average((run) => run.observations),
+      averageChargesConsumed: average((run) => run.chargesConsumed),
       averageReportsPublished: average((run) => run.reports),
+      salvageFamilyOutcomes: runs.reduce(
+        (totals, run) => {
+          for (const family of Object.keys(totals) as Array<keyof typeof totals>)
+            totals[family] += run.salvageFamilyOutcomes[family];
+          return totals;
+        },
+        { "findings-cache": 0, "provision-cache": 0, "repair-material": 0 },
+      ),
+      returnReserveWarningsEncountered: runs.reduce<Record<string, number>>((totals, run) => {
+        for (const [warning, occurrences] of Object.entries(run.returnReserveWarningsEncountered))
+          totals[warning] = (totals[warning] ?? 0) + occurrences;
+        return totals;
+      }, {}),
       terminalChecksumSummary: checksum(runs.map((run) => run.checksum).join("")),
     };
   });

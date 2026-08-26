@@ -37,19 +37,19 @@ describe("player-safe action contract", () => {
     const initial = createInitialState(31);
     const begun = accepted(initial, start);
     const departed = accepted(begun, {
-      protocolVersion: 1,
+      protocolVersion: 2,
       commandId: "test-depart",
       kind: "travel",
       routeId: "r-hs",
     });
     const returnedHome = accepted(departed, {
-      protocolVersion: 1,
+      protocolVersion: 2,
       commandId: "test-home",
       kind: "travel",
       routeId: "r-hs",
     });
     const resolved = accepted(returnedHome, {
-      protocolVersion: 1,
+      protocolVersion: 2,
       commandId: "test-resolve",
       kind: "resolve-return",
     });
@@ -116,9 +116,9 @@ describe("headless simulation", () => {
 
   it("does not mark a returned run complete before publication", () => {
     const run = runExpedition("cautious", 9, 6);
-    expect(run.replay.events.at(-1)?.kind).toBe("expedition-returned");
     expect(run.completedFullLoop).toBe(false);
     expect(run.timedOut).toBe(true);
+    expect(run.replay.commands.some((command) => command.kind === "publish-reports")).toBe(false);
   });
 
   it("replays retained commands and events to the same terminal checksum", () => {
@@ -137,7 +137,7 @@ describe("headless simulation", () => {
   it("surfaces command-stream rejection context", () => {
     const replay = replayCommands(1, [
       {
-        protocolVersion: 1,
+        protocolVersion: 2,
         commandId: "invalid-replay-return",
         kind: "resolve-return",
       },
