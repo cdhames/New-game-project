@@ -461,7 +461,7 @@ function PublicationControls(props: MissionControlProps): React.JSX.Element {
               {props.projection.activeCommission?.offer.family === "verify-report" &&
               observation.subjectId === props.projection.activeCommission.offer.subjectId &&
               observation.category === props.projection.activeCommission.offer.category ? (
-                <strong className="commission-match">Matches the verification Commission</strong>
+                <strong className="commission-match">✓ Satisfies Verify Report Commission</strong>
               ) : null}
             </label>
           );
@@ -518,6 +518,10 @@ function ActiveCommissionCard({
 }): React.JSX.Element | null {
   const active = projection.activeCommission;
   if (!active) return null;
+  const returned = projection.phase === "returned";
+  const verifyPendingPublication =
+    returned && active.offer.publicationRequired && active.progress.status === "objective-met";
+  const completedOnReturn = returned && active.progress.status === "completed";
   return (
     <article className="active-commission-card" aria-label="Active Commission">
       <CommissionDescription offer={active.offer} />
@@ -529,10 +533,20 @@ function ActiveCommissionCard({
             ? `Target salvage recovered: ${active.progress.targetSalvageRecovered ? "yes" : "no"}`
             : `Matching Observation recorded: ${active.progress.matchingObservationRecorded ? "yes" : "no"}`}
       </span>
-      <span>
-        Safe return required
-        {active.offer.publicationRequired ? "; matching publication also required" : ""}.
-      </span>
+      {verifyPendingPublication ? (
+        <span>
+          Return complete. Matching Observation recorded. Publication required and pending.
+        </span>
+      ) : completedOnReturn ? (
+        <span>
+          Safe return completed. Commission completed; reward granted. Publication optional.
+        </span>
+      ) : (
+        <span>
+          Safe return outstanding
+          {active.offer.publicationRequired ? "; matching publication also required" : ""}.
+        </span>
+      )}
     </article>
   );
 }

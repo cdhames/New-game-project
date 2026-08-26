@@ -23,6 +23,12 @@ safe progress. Survey, frontier, and salvage grant their banked Findings reward 
 return when the objective is met. Verify grants once only when a matching current-Expedition
 Observation is explicitly published after return. Failure grants none.
 
+Commission planning knowledge is limited to stable topology known from non-hidden routes, Reports,
+and banked personal Observations. Unbanked Observations on a failed Expedition cannot create an offer
+that disappears when a replacement Expedition starts. Verify candidates must also be legally
+observable: route claims use known routes and only route, hazard, or condition categories; node
+claims require a known node whose category matches opportunity, hazard, or condition.
+
 Preparation is not a mutable shop. `start-expedition` atomically commits the Commission, exactly two
 instruments, and a plan. One Finding buys each of up to two extra starting Provisions; two Findings
 buy +1 starting/maximum Vessel Integrity; one Finding buys +1 starting/maximum Charge for each
@@ -32,6 +38,10 @@ Each published player Report adds one non-spendable Atlas Contribution. A bounde
 previous-Commission result survives Expedition clearing. Browser record v3 uses a new key and stores
 protocol/scenario versions; v1/v2 records are never replayed and remain untouched until targeted
 confirmed reset.
+
+Browser-only Commission, preparation, and publication selections clear only after an accepted,
+persisted command reaches idle or failed state. Rejected commands and storage failures preserve the
+choices for a truthful retry.
 
 ## Alternatives considered
 

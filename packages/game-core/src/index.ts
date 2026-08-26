@@ -305,6 +305,14 @@ function knownRouteIds(state: CanonicalState): Set<StableId> {
     if (evidence.category === "route") known.add(evidence.subjectId);
   return known;
 }
+function planningKnownRouteIds(state: CanonicalState): Set<StableId> {
+  const known = new Set<StableId>(
+    state.world.routes.filter((route) => !route.hidden).map((route) => route.id),
+  );
+  for (const evidence of [...state.reports, ...state.personalObservations])
+    if (evidence.category === "route") known.add(evidence.subjectId);
+  return known;
+}
 function reportClaim(state: CanonicalState, report: ReportRecord): AtlasClaim {
   return {
     ...report,
@@ -316,8 +324,11 @@ function reportClaim(state: CanonicalState, report: ReportRecord): AtlasClaim {
     ).size,
   };
 }
-function knownDistances(state: CanonicalState, origin: StableId): Map<StableId, number> {
-  const known = knownRouteIds(state);
+function knownDistances(
+  state: CanonicalState,
+  origin: StableId,
+  known = knownRouteIds(state),
+): Map<StableId, number> {
   const distances = new Map<StableId, number>([[origin, 0]]);
   const queue = [origin];
   while (queue.length) {
@@ -350,7 +361,7 @@ export function generateCommissionOffers(
   scenario = DEVELOPMENT_SCENARIO,
 ): CommissionOffer[] {
   if (!canStartExpedition(state)) return [];
-  const knownRoutes = knownRouteIds(state);
+  const knownRoutes = planningKnownRouteIds(state);
   const knownNodes = new Set<StableId>([
     scenario.waystationId,
     ...state.world.routes
@@ -358,11 +369,24 @@ export function generateCommissionOffers(
       .flatMap((route) => [route.a, route.b]),
   ]);
   const claims = state.reports.map((report) => reportClaim(state, report));
-  const legallyObservable = claims.filter((claim) =>
-    claim.category === "opportunity"
-      ? knownNodes.has(claim.subjectId)
-      : knownRoutes.has(claim.subjectId),
-  );
+  const legallyObservable = claims.filter((claim) => {
+    const route = state.world.routes.find((item) => item.id === claim.subjectId);
+    if (route)
+      return (
+        knownRoutes.has(route.id) &&
+        (claim.category === "route" ||
+          claim.category === "hazard" ||
+          claim.category === "condition")
+      );
+    const node = state.world.nodes.find((item) => item.id === claim.subjectId);
+    if (!node || !knownNodes.has(node.id)) return false;
+    if (claim.category === "opportunity")
+      return node.category === "opportunity" && node.opportunity > 0;
+    return (
+      (claim.category === "hazard" || claim.category === "condition") &&
+      node.category === claim.category
+    );
+  });
   const offers: CommissionOffer[] = [];
   const verify = weakestEvidence(legallyObservable);
   if (verify)
@@ -413,7 +437,7 @@ export function generateCommissionOffers(
       requiredInstrument: methodFor[survey.category],
     });
 
-  const distances = knownDistances(state, scenario.waystationId);
+  const distances = knownDistances(state, scenario.waystationId, knownRoutes);
   const frontier = [...distances]
     .filter(
       ([nodeId, distance]) =>

@@ -111,6 +111,13 @@ generated only from `actions.traversableRouteIds` and known safe route descripto
 panel. The full known-topology text alternative remains in the Atlas tab as secondary reference. The
 SVG description points to the equivalent mission-panel controls.
 
+Returned Commission copy distinguishes an outstanding safe return from a completed non-publication
+Commission and a Verify Report Commission awaiting publication. Every eligible matching Observation
+has a visible non-color `Satisfies Verify Report Commission` marker; unrelated Observations are not
+marked or automatically selected. Local Commission, preparation, and publication selections reset
+only after the authority confirms a persisted transition to idle or failed state, so rejected and
+storage-failed commands retain retry choices.
+
 Sanitized salvage activity reports the actual bounded effect rather than the nominal scenario value:
 Provision caches state cost, restored amount, and net change; repair material distinguishes applied
 repair from an already-full vessel; Findings caches state actual Findings and Provision cost. Raw
@@ -186,6 +193,10 @@ transactional behavior when localStorage writes fail.
 The publication-limit regression constructs four distinct legal Observations from two Sounding Line
 and two Weather Glass Charges, verifies the fourth selection disables at three, verifies deselection
 re-enables it, and confirms only the three selected Reports reach the Atlas.
+
+Lifecycle regressions also cover returned Commission wording, Verify Report eligibility markers and
+non-selection, storage-failed publication retry, and cleanup only after accepted terminal
+transitions.
 
 Existing protocol, core, property, replay, simulation, and smoke tests remain unchanged.
 

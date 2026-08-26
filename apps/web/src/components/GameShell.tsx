@@ -26,6 +26,12 @@ interface GameShellProps {
   reset: () => void;
 }
 
+const zeroPreparation = (): PreparationPlan => ({
+  extraProvisions: 0,
+  reinforcedVesselIntegrity: false,
+  extraChargeInstruments: [],
+});
+
 export function GameShell(props: GameShellProps): React.JSX.Element {
   const [view, setView] = useState<AuthorityView>(() => props.authority.view());
   const processingRef = useRef(false);
@@ -34,16 +40,15 @@ export function GameShell(props: GameShellProps): React.JSX.Element {
     if (props.processing || processingRef.current) return;
     processingRef.current = true;
     props.setProcessing(true);
+    const previousAcceptedCommandCount = view.acceptedCommandCount;
     const next = props.authority.dispatch(intent);
     setView(next);
-    if (intent.kind === "publish-reports") props.setSelectedReports([]);
-    if (intent.kind === "publish-reports" || intent.kind === "resolve-failure") {
+    const accepted = next.acceptedCommandCount > previousAcceptedCommandCount;
+    if (accepted && (next.projection.phase === "idle" || next.projection.phase === "failed"))
+      props.setSelectedReports([]);
+    if (accepted && (next.projection.phase === "idle" || next.projection.phase === "failed")) {
       props.setSelectedCommissionId(null);
-      props.setPreparation({
-        extraProvisions: 0,
-        reinforcedVesselIntegrity: false,
-        extraChargeInstruments: [],
-      });
+      props.setPreparation(zeroPreparation());
     }
     queueMicrotask(() => {
       processingRef.current = false;

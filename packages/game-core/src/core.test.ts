@@ -910,6 +910,101 @@ describe("Revision 0.2 Commission and preparation foundation", () => {
     });
   });
 
+  it("allows a known condition node to be the highest-ranked verify target", () => {
+    const state = createInitialState(45);
+    state.reports = [
+      report("node-condition-report", "node-condition-expedition", {
+        subjectId: "glass-cay",
+        category: "condition",
+        value: 0,
+        method: "weather-glass",
+        quality: "low",
+        observedAt: 0,
+        observedRevision: 0,
+      }),
+    ];
+    state.world.subjectLastChangedRevision["glass-cay"] = 1;
+    expect(createPlayerProjection(state).commissionOffers[0]).toMatchObject({
+      family: "verify-report",
+      subjectId: "glass-cay",
+      category: "condition",
+    });
+  });
+
+  it("allows a known hazard node to be the highest-ranked verify target", () => {
+    const state = createInitialState(46);
+    state.reports = [
+      report("node-hazard-report", "node-hazard-expedition", {
+        subjectId: "reed-bank",
+        category: "hazard",
+        value: 1,
+        method: "weather-glass",
+        quality: "low",
+        observedAt: 0,
+        observedRevision: 0,
+      }),
+    ];
+    state.world.subjectLastChangedRevision["reed-bank"] = 1;
+    expect(createPlayerProjection(state).commissionOffers[0]).toMatchObject({
+      family: "verify-report",
+      subjectId: "reed-bank",
+      category: "hazard",
+    });
+  });
+
+  it("does not offer an inapplicable category merely because its node is known", () => {
+    const state = createInitialState(47);
+    state.reports = [
+      report("invalid-node-report", "invalid-node-expedition", {
+        subjectId: "shoal",
+        category: "hazard",
+        value: 3,
+        method: "weather-glass",
+        quality: "low",
+        observedAt: 0,
+      }),
+      report("valid-route-report", "valid-route-expedition", {
+        subjectId: "r-hs",
+        category: "route",
+        quality: "high",
+      }),
+    ];
+    expect(createPlayerProjection(state).commissionOffers[0]).toMatchObject({
+      family: "verify-report",
+      reportId: "valid-route-report",
+    });
+  });
+
+  it("keeps failed-state offers stable when the failed Expedition is overwritten", () => {
+    const begun = startOffer(createInitialState(48), "commission-salvage", [
+      "field-lens",
+      "sounding-line",
+    ]);
+    expect(begun.ok).toBe(true);
+    if (!begun.ok || !begun.state.expedition) return;
+    begun.state.phase = "failed";
+    begun.state.expedition.observations.push({
+      ...observation("failed-hidden-route"),
+      subjectId: "r-ol",
+    });
+    const failedProjection = createPlayerProjection(begun.state);
+    expect(serializeCanonical(failedProjection.commissionOffers)).not.toContain("r-ol");
+    const offer = failedProjection.commissionOffers[0]!;
+    const requiredInstrument =
+      "requiredInstrument" in offer ? offer.requiredInstrument : "sounding-line";
+    const secondInstrument = requiredInstrument === "field-lens" ? "sounding-line" : "field-lens";
+    const restarted = startOffer(begun.state, offer.id, [requiredInstrument, secondInstrument]);
+    expect(restarted.ok).toBe(true);
+    if (!restarted.ok) return;
+    const restartedProjection = createPlayerProjection(restarted.state);
+    const active = restartedProjection.activeCommission!.offer;
+    const target = "subjectId" in active ? active.subjectId : active.targetLocationId;
+    expect(
+      restartedProjection.knownNodeIds.includes(target) ||
+        restartedProjection.knownRoutes.some((route) => route.id === target),
+    ).toBe(true);
+  });
+
   it("requires a current compatible Commission and rejects invalid starts byte-identically", () => {
     const state = createInitialState(2);
     const before = serializeCanonicalState(state);

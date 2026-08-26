@@ -13,10 +13,12 @@ import {
 
 class MemoryStorage implements StoragePort {
   readonly values = new Map<string, string>();
+  failWrites = false;
   getItem(key: string): string | null {
     return this.values.get(key) ?? null;
   }
   setItem(key: string, value: string): void {
+    if (this.failWrites) throw new Error("simulated storage failure");
     this.values.set(key, value);
   }
   removeItem(key: string): void {
@@ -239,6 +241,87 @@ describe("player-facing browser prototype", () => {
     render(<App storage={storage} />);
     await user.click(screen.getByRole("button", { name: "Publish nothing" }));
     expect(screen.getByRole("button", { name: "Start Expedition" })).toBeInTheDocument();
+  });
+
+  it("preserves publication choices after an unpersisted command and clears setup only after retry succeeds", async () => {
+    const storage = new MemoryStorage();
+    const authority = authorityFor(storage);
+    startAndTravel(authority);
+    authority.dispatch({ kind: "salvage", opportunityId: "shoal" });
+    authority.dispatch({ kind: "travel", routeId: "r-hs" });
+    authority.dispatch({ kind: "resolve-return" });
+    authority.dispatch({ kind: "publish-reports", observationIds: [] });
+
+    const user = userEvent.setup();
+    render(<App storage={storage} />);
+    await chooseCommission(user);
+    await user.clear(screen.getByLabelText("Extra Provisions"));
+    await user.type(screen.getByLabelText("Extra Provisions"), "1");
+    await user.click(screen.getByRole("button", { name: "Start Expedition" }));
+    await user.click(screen.getByRole("button", { name: "Travel toward Whisper Shoal" }));
+    await user.click(
+      screen.getByRole("button", { name: "Observe Route at Lantern Harbor ↔ Whisper Shoal" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Travel toward Lantern Harbor" }));
+    await user.click(screen.getByRole("button", { name: "Resolve safe return" }));
+    const report = screen.getByRole("checkbox");
+    await user.click(report);
+    storage.failWrites = true;
+    await user.click(screen.getByRole("button", { name: "Publish selected Reports" }));
+    expect(
+      screen.getByRole("heading", { name: "Choose Reports for the Atlas" }),
+    ).toBeInTheDocument();
+    expect(report).toBeChecked();
+    expect(
+      screen.getByText(/not saved or applied because local storage is unavailable/i),
+    ).toBeInTheDocument();
+
+    storage.failWrites = false;
+    await user.click(screen.getByRole("button", { name: "Publish selected Reports" }));
+    expect(screen.getByRole("button", { name: "Start Expedition" })).toBeDisabled();
+    expect(screen.getByLabelText("Extra Provisions")).toHaveValue(0);
+    expect(screen.getAllByRole("radio").every((radio) => !radio.hasAttribute("checked"))).toBe(
+      true,
+    );
+  });
+
+  it("states that a returned non-publication Commission is complete and publication is optional", async () => {
+    const storage = new MemoryStorage();
+    const authority = authorityFor(storage);
+    startAndTravel(authority);
+    authority.dispatch({ kind: "salvage", opportunityId: "shoal" });
+    authority.dispatch({ kind: "travel", routeId: "r-hs" });
+    authority.dispatch({ kind: "resolve-return" });
+    render(<App storage={storage} />);
+    expect(screen.getByLabelText("Active Commission")).toHaveTextContent(
+      "Safe return completed. Commission completed; reward granted. Publication optional.",
+    );
+    expect(screen.getByLabelText("Active Commission")).not.toHaveTextContent(
+      "Safe return outstanding",
+    );
+  });
+
+  it("marks every matching Verify Report observation without selecting it and explains pending publication", async () => {
+    const user = userEvent.setup();
+    render(<App storage={new MemoryStorage()} />);
+    await user.click(screen.getByRole("radio", { name: /Verify Report/i }));
+    await user.click(screen.getByRole("button", { name: "Start Expedition" }));
+    await user.click(screen.getByRole("button", { name: "Travel toward Whisper Shoal" }));
+    await user.click(
+      screen.getByRole("button", { name: "Observe Hazard at Whisper Shoal ↔ North Mark" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Observe Route at Lantern Harbor ↔ Whisper Shoal" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Travel toward Lantern Harbor" }));
+    await user.click(screen.getByRole("button", { name: "Resolve safe return" }));
+    expect(screen.getByLabelText("Active Commission")).toHaveTextContent(
+      "Return complete. Matching Observation recorded. Publication required and pending.",
+    );
+    expect(screen.getAllByText("✓ Satisfies Verify Report Commission")).toHaveLength(1);
+    expect(screen.getAllByRole("checkbox").every((box) => !(box as HTMLInputElement).checked)).toBe(
+      true,
+    );
   });
 
   it("shows Drift-required state, blocks starting, and renders stale warnings after advance", async () => {

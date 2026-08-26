@@ -99,6 +99,11 @@ Charge per selected instrument) paid from banked Findings. Rewards resolve once 
 except verify, which resolves on matching publication. Player Reports increment non-spendable Atlas
 Contribution, and a bounded previous-Commission result survives Expedition clearing.
 
+Verification filters claims by both known subject topology and the observation categories that the
+subject legally supports, including condition and hazard nodes. Offer planning excludes unbanked
+failed-Expedition Observations, so every failed-state offer remains valid when its replacement
+Expedition overwrites the prior one.
+
 All names, rewards, costs, hazard thresholds, and instrument mappings are tuning parameters.
 
 ## Simulation policies
