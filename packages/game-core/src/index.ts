@@ -616,19 +616,25 @@ export function applyCommand(
     if (expedition.provisions < SALVAGE_PROVISION_COST)
       return reject(state, "insufficient-provisions");
     const family = node.salvageFamily!;
-    const value = node.salvageValue!;
+    const nominalValue = node.salvageValue!;
+    const beforeProvisions = expedition.provisions;
     next.expedition!.provisions -= SALVAGE_PROVISION_COST;
-    if (family === "findings-cache") next.expedition!.unbankedFindings += value;
-    if (family === "provision-cache")
-      next.expedition!.provisions = Math.min(
-        next.expedition!.maximumProvisions,
-        next.expedition!.provisions + value,
+    let appliedValue = nominalValue;
+    if (family === "findings-cache") next.expedition!.unbankedFindings += appliedValue;
+    if (family === "provision-cache") {
+      appliedValue = Math.min(
+        nominalValue,
+        next.expedition!.maximumProvisions - next.expedition!.provisions,
       );
-    if (family === "repair-material")
-      next.expedition!.vesselIntegrity = Math.min(
-        next.expedition!.maximumVesselIntegrity,
-        next.expedition!.vesselIntegrity + value,
+      next.expedition!.provisions += appliedValue;
+    }
+    if (family === "repair-material") {
+      appliedValue = Math.min(
+        nominalValue,
+        next.expedition!.maximumVesselIntegrity - next.expedition!.vesselIntegrity,
       );
+      next.expedition!.vesselIntegrity += appliedValue;
+    }
     next.expedition!.salvagedOpportunityIds.push(node.id);
     return {
       ok: true,
@@ -637,7 +643,13 @@ export function applyCommand(
         snapshotEvent(next, "opportunity-salvaged", {
           opportunityId: node.id,
           family,
-          value,
+          provisionCost: SALVAGE_PROVISION_COST,
+          nominalValue,
+          appliedValue,
+          netProvisionChange: next.expedition!.provisions - beforeProvisions,
+          resultingProvisions: next.expedition!.provisions,
+          resultingVesselIntegrity: next.expedition!.vesselIntegrity,
+          resultingUnbankedFindings: next.expedition!.unbankedFindings,
         }),
       ],
     };

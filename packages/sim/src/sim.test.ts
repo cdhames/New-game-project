@@ -114,6 +114,18 @@ describe("headless simulation", () => {
     expect(surveyor.averageReportsPublished).toBeGreaterThan(0);
   });
 
+  it("retains successful Expedition outcome resources after publication clears canonical state", () => {
+    const run = Array.from({ length: 100 }, (_, index) =>
+      runExpedition("random", 30_000 + index),
+    ).find((candidate) => candidate.completedFullLoop && (candidate.endingProvisions ?? 0) > 0);
+    expect(run).toBeDefined();
+    if (!run) return;
+    expect(run.completedFullLoop).toBe(true);
+    expect(run.endingProvisions).not.toBeNull();
+    expect(run.endingProvisions).toBeGreaterThan(0);
+    expect(run.endingVesselIntegrity).not.toBeNull();
+  });
+
   it("does not mark a returned run complete before publication", () => {
     const run = runExpedition("cautious", 9, 6);
     expect(run.completedFullLoop).toBe(false);

@@ -57,6 +57,11 @@ begin with 8 Provisions, 4 Vessel Integrity, and 2 Charges for each selected ins
 1 Provision, Observation costs 1 matching Charge, and salvage costs 1 Provision before applying its
 typed result. A Trace contains at most half of eligible lost unbanked Findings.
 
+Salvage events distinguish the configured nominal cache/material value from the bounded value
+actually applied. They also record the 1-Provision cost, net Provision change, and resulting current
+Provisions, Vessel Integrity, and unbanked Findings. This keeps capped restoration deterministic and
+truthful without revealing exact values before salvage.
+
 Return Reserve is a breadth-first shortest-path cost to Lantern Harbor over known route endpoints
 only. It is null when no known path exists and does not inspect hazards, conditions, or unrevealed
 routes. Provision margins map to comfortable (at least 2), caution (1), at-reserve (0), and
@@ -103,7 +108,7 @@ The smoke study runs 100 seeded Expeditions each for four simple infrastructure 
 Policies consume only the safe projection and issue commands validated by `PlayerCommandSchema`.
 They are deterministic test heuristics, not models of human behavior. Output includes full-loop
 completion, failure and timeout rates, rejected-command totals, decision steps, frontier depth, banked
-Findings, terminal Provisions and Vessel Integrity, unbanked Findings, Charges consumed,
+Findings, ending Expedition Provisions and Vessel Integrity, unbanked Findings, Charges consumed,
 salvage-family outcomes, Return Reserve warnings, Observations, Reports, and checksum summaries. A command unexpectedly rejected from
 an advertised affordance raises a structured invariant error with policy, seed, step, command, reason,
 state checksum, and replay context. Reaching the step limit is explicitly classified as a timeout.
@@ -114,6 +119,11 @@ are re-applied through `applyCommand`, while retained event streams are folded i
 must reconstruct the terminal checksum.
 
 The study validates deterministic infrastructure only. It is not a balance conclusion.
+
+Ending resource metrics retain the last active Expedition snapshot: successful runs use the state
+immediately after return and before publication clears the Expedition, failures use the failed state,
+and timeouts use the latest active state. A run that never starts reports null; aggregate ending
+resource averages exclude null runs.
 
 ## Validation
 

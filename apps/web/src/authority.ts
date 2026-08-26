@@ -143,14 +143,19 @@ const safeSummary = (domainEvent: DomainEvent, sequence: number): SafeEventSumma
     return { ...base, message: "A new Observation was recorded in the Logbook.", tone: "positive" };
   if (domainEvent.kind === "opportunity-salvaged") {
     const family = domainEvent.payload["family"];
-    const value = domainEvent.payload["value"];
+    const cost = domainEvent.payload["provisionCost"];
+    const applied = domainEvent.payload["appliedValue"];
+    const net = domainEvent.payload["netProvisionChange"];
+    const provisionWord = cost === 1 ? "Provision" : "Provisions";
     const result =
       family === "provision-cache"
-        ? `${value} Provisions restored`
+        ? `Provision cache: spent ${cost} ${provisionWord}, recovered ${applied}, net ${typeof net === "number" && net >= 0 ? "+" : ""}${net}`
         : family === "repair-material"
-          ? `${value} Vessel Integrity restored`
+          ? applied === 0
+            ? "Repair material could not restore Integrity because the vessel was already at maximum"
+            : `Repair material restored ${applied} Vessel Integrity`
           : family === "findings-cache"
-            ? `${value} unbanked Findings recovered`
+            ? `Recovered ${applied} unbanked Findings after spending ${cost} ${provisionWord}`
             : "salvage recovered";
     return {
       ...base,

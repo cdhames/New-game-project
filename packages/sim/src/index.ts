@@ -27,8 +27,8 @@ export interface RunMetrics {
   rejectedCommandCount: number;
   steps: number;
   maxDepth: number;
-  provisions: number;
-  vesselIntegrity: number;
+  endingProvisions: number | null;
+  endingVesselIntegrity: number | null;
   bankedFindings: number;
   unbankedFindings: number;
   observations: number;
@@ -48,8 +48,8 @@ export interface Aggregate {
   rejectedCommandCount: number;
   averageDecisionSteps: number;
   averageFrontierDepth: number;
-  averageTerminalProvisions: number;
-  averageTerminalVesselIntegrity: number;
+  averageEndingProvisions: number | null;
+  averageEndingVesselIntegrity: number | null;
   averageBankedFindings: number;
   averageUnbankedFindings: number;
   averageObservationsCreated: number;
@@ -306,6 +306,7 @@ export function runExpedition(policy: PolicyName, seed: number, stepLimit = 40):
   let policyRng = { value: (seed ^ 0x9e3779b9) >>> 0 };
   const waystationId = createPlayerProjection(initial).locationId;
   let published = false;
+  let lastExpeditionResources: { provisions: number; vesselIntegrity: number } | null = null;
   const returnReserveWarningsEncountered: Record<string, number> = {};
 
   while (steps < stepLimit) {
@@ -346,6 +347,11 @@ export function runExpedition(policy: PolicyName, seed: number, stepLimit = 40):
       });
     }
     state = result.state;
+    if (state.expedition)
+      lastExpeditionResources = {
+        provisions: state.expedition.provisions,
+        vesselIntegrity: state.expedition.vesselIntegrity,
+      };
     events.push(...result.events);
     if (selected.kind === "publish-reports") published = true;
   }
@@ -354,7 +360,6 @@ export function runExpedition(policy: PolicyName, seed: number, stepLimit = 40):
     steps >= stepLimit && state.phase !== "failed" && !(state.phase === "idle" && published);
   const terminalChecksum = checksum(serializeCanonicalState(state));
   const playerReports = state.reports.filter((item) => item.sourceClass === "player").length;
-  const terminalExpedition = state.expedition;
   const salvageFamilyOutcomes = {
     "findings-cache": 0,
     "provision-cache": 0,
@@ -373,10 +378,10 @@ export function runExpedition(policy: PolicyName, seed: number, stepLimit = 40):
     rejectedCommandCount,
     steps,
     maxDepth,
-    provisions: terminalExpedition?.provisions ?? 0,
-    vesselIntegrity: terminalExpedition?.vesselIntegrity ?? 0,
+    endingProvisions: lastExpeditionResources?.provisions ?? null,
+    endingVesselIntegrity: lastExpeditionResources?.vesselIntegrity ?? null,
     bankedFindings: state.bankedFindings,
-    unbankedFindings: terminalExpedition?.unbankedFindings ?? 0,
+    unbankedFindings: state.expedition?.unbankedFindings ?? 0,
     observations: state.personalObservations.length,
     chargesConsumed: commands.filter((item) => item.kind === "observe").length,
     salvageFamilyOutcomes,
@@ -400,6 +405,12 @@ export function smokeStudy(count = 100): Aggregate[] {
     const runs = Array.from({ length: count }, (_, index) => runExpedition(policy, 10_000 + index));
     const average = (pick: (run: RunMetrics) => number): number =>
       runs.reduce((total, run) => total + pick(run), 0) / runs.length;
+    const averageDefined = (pick: (run: RunMetrics) => number | null): number | null => {
+      const values = runs.map(pick).filter((value): value is number => value !== null);
+      return values.length
+        ? values.reduce((total, value) => total + value, 0) / values.length
+        : null;
+    };
     return {
       policy,
       expeditions: count,
@@ -409,8 +420,8 @@ export function smokeStudy(count = 100): Aggregate[] {
       rejectedCommandCount: runs.reduce((total, run) => total + run.rejectedCommandCount, 0),
       averageDecisionSteps: average((run) => run.steps),
       averageFrontierDepth: average((run) => run.maxDepth),
-      averageTerminalProvisions: average((run) => run.provisions),
-      averageTerminalVesselIntegrity: average((run) => run.vesselIntegrity),
+      averageEndingProvisions: averageDefined((run) => run.endingProvisions),
+      averageEndingVesselIntegrity: averageDefined((run) => run.endingVesselIntegrity),
       averageBankedFindings: average((run) => run.bankedFindings),
       averageUnbankedFindings: average((run) => run.unbankedFindings),
       averageObservationsCreated: average((run) => run.observations),

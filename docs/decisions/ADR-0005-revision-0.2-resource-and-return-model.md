@@ -27,6 +27,9 @@ Salvage is data-driven and one-time per Expedition. Whisper Shoal is a 2-Provisi
 is a 2-Findings cache; Pale Inlet repairs 1 Vessel Integrity; Far Sound and Last Cairn grant 3 and 4
 Findings. Restoration is capped. The safe projection exposes family but not exact value before
 resolution. Findings are unbanked until legal return, lost on failure, and may leave a bounded Trace.
+Resolved salvage events preserve both the nominal scenario value and the bounded value actually
+applied, plus Provision cost, net Provision change, and resulting resource totals. Presentation uses
+the applied result so capped caches or repair never overstate their effect.
 
 Browser record version 2 uses a new key and stores protocol and scenario versions. Known v1 history
 is not migrated or replayed under changed rules; it remains untouched until confirmed targeted reset.

@@ -111,6 +111,11 @@ generated only from `actions.traversableRouteIds` and known safe route descripto
 panel. The full known-topology text alternative remains in the Atlas tab as secondary reference. The
 SVG description points to the equivalent mission-panel controls.
 
+Sanitized salvage activity reports the actual bounded effect rather than the nominal scenario value:
+Provision caches state cost, restored amount, and net change; repair material distinguishes applied
+repair from an already-full vessel; Findings caches state actual Findings and Provision cost. Raw
+events and canonical snapshots remain outside React.
+
 Below the desktop breakpoint, normal document scrolling returns and the DOM/reading order is compact
 status, map, mission/actions, secondary tabs, then utilities. No CSS-only reordering contradicts that
 order. The action panel is not sticky, tabs remain internally bounded, and the page prevents
@@ -177,6 +182,10 @@ raw canonical/event snapshot content. Reliability coverage also exercises normal
 from an active session, non-contiguous and rejection-safe command sequencing, reload uniqueness, and
 transactional behavior when localStorage writes fail.
 
+The publication-limit regression constructs four distinct legal Observations from two Sounding Line
+and two Weather Glass Charges, verifies the fourth selection disables at three, verifies deselection
+re-enables it, and confirms only the three selected Reports reach the Atlas.
+
 Existing protocol, core, property, replay, simulation, and smoke tests remain unchanged.
 
 ## Known limitations and deferred work
@@ -189,8 +198,7 @@ recovery commands not yet present in the core, or the deferred Waystation contri
 remain later-phase work subject to the project evidence gates.
 
 The 1366 × 768 setup and active mission content can require scrolling inside the bounded action
-panel, and the intentionally stacked mobile layout requires ordinary document scrolling. Stage 1
-does not implement Revision 0.2 Commissions, Provisions/Charges, Return Reserve, Findings,
-preparation spending, salvage redesign, route-evidence redesign, or Expedition completion summaries.
-It does not change Supply, Integrity, costs, rewards, outcomes, Drift, protocol, authority semantics,
-or command-log persistence.
+panel, and the intentionally stacked mobile layout requires ordinary document scrolling. The current
+foundation does not implement Revision 0.2 Commissions, preparation spending, Atlas Contribution,
+route-evidence redesign, or Expedition completion summaries. It does not add new map content or
+production authority, persistence, or infrastructure.

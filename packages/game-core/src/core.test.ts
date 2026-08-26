@@ -204,7 +204,16 @@ describe("deterministic expedition core", () => {
     expect(salvaged.ok).toBe(true);
     if (!salvaged.ok) return;
     expect(salvaged.state.expedition?.provisions).toBe(BASE_PROVISIONS);
-    expect(salvaged.events[0]?.payload).toMatchObject({ family: "provision-cache", value: 2 });
+    expect(salvaged.events[0]?.payload).toMatchObject({
+      family: "provision-cache",
+      provisionCost: 1,
+      nominalValue: 2,
+      appliedValue: 2,
+      netProvisionChange: 1,
+      resultingProvisions: 8,
+      resultingVesselIntegrity: 4,
+      resultingUnbankedFindings: 0,
+    });
     expect(
       applyCommand(salvaged.state, {
         protocolVersion: PROTOCOL_VERSION,
@@ -216,6 +225,90 @@ describe("deterministic expedition core", () => {
     expect(
       createPlayerProjection(shoal.state).actions.salvageableOpportunities[0],
     ).not.toHaveProperty("value");
+  });
+
+  it("reports bounded applied salvage values for capped restoration, repair, and Findings", () => {
+    const begun = applyCommand(createInitialState(4), start("salvage-effects-start"));
+    expect(begun.ok).toBe(true);
+    if (!begun.ok || !begun.state.expedition) return;
+
+    const cappedProvisionState = structuredClone(begun.state);
+    cappedProvisionState.expedition!.locationId = "shoal";
+    cappedProvisionState.expedition!.travelCount = 1;
+    const capped = applyCommand(cappedProvisionState, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "capped-provision-cache",
+      kind: "salvage",
+      opportunityId: "shoal",
+    });
+    expect(capped.ok).toBe(true);
+    if (!capped.ok) return;
+    expect(capped.events[0]?.payload).toMatchObject({
+      family: "provision-cache",
+      nominalValue: 2,
+      appliedValue: 1,
+      netProvisionChange: 0,
+      resultingProvisions: 8,
+    });
+
+    const damagedRepairState = structuredClone(begun.state);
+    damagedRepairState.expedition!.locationId = "pale-inlet";
+    damagedRepairState.expedition!.travelCount = 1;
+    damagedRepairState.expedition!.vesselIntegrity = 3;
+    const repaired = applyCommand(damagedRepairState, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "damaged-repair-material",
+      kind: "salvage",
+      opportunityId: "pale-inlet",
+    });
+    expect(repaired.ok).toBe(true);
+    if (!repaired.ok) return;
+    expect(repaired.events[0]?.payload).toMatchObject({
+      family: "repair-material",
+      provisionCost: 1,
+      nominalValue: 1,
+      appliedValue: 1,
+      resultingVesselIntegrity: 4,
+    });
+
+    const fullRepairState = structuredClone(begun.state);
+    fullRepairState.expedition!.locationId = "pale-inlet";
+    fullRepairState.expedition!.travelCount = 1;
+    const fullRepair = applyCommand(fullRepairState, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "full-repair-material",
+      kind: "salvage",
+      opportunityId: "pale-inlet",
+    });
+    expect(fullRepair.ok).toBe(true);
+    if (!fullRepair.ok) return;
+    expect(fullRepair.events[0]?.payload).toMatchObject({
+      family: "repair-material",
+      nominalValue: 1,
+      appliedValue: 0,
+      resultingVesselIntegrity: 4,
+    });
+
+    const findingsState = structuredClone(begun.state);
+    findingsState.expedition!.locationId = "north-mark";
+    findingsState.expedition!.travelCount = 2;
+    const findings = applyCommand(findingsState, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "north-mark-findings",
+      kind: "salvage",
+      opportunityId: "north-mark",
+    });
+    expect(findings.ok).toBe(true);
+    if (!findings.ok) return;
+    expect(findings.events[0]?.payload).toMatchObject({
+      family: "findings-cache",
+      provisionCost: 1,
+      nominalValue: 2,
+      appliedValue: 2,
+      netProvisionChange: -1,
+      resultingProvisions: 7,
+      resultingUnbankedFindings: 2,
+    });
   });
 
   it("produces byte-identical results and replays ordered events", () => {

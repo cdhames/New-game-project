@@ -109,12 +109,14 @@ describe("player-facing browser prototype", () => {
     ).toBeInTheDocument();
   });
 
-  it("publishes selected returned Observations and changes the Atlas", async () => {
+  it("enforces the three-Report publication limit across four legal Observations", async () => {
     const storage = new MemoryStorage();
     const authority = authorityFor(storage);
     startAndTravel(authority);
-    for (let index = 0; index < 2; index += 1)
-      authority.dispatch({ kind: "observe", subjectId: "r-hs", category: "route" });
+    authority.dispatch({ kind: "observe", subjectId: "r-hs", category: "route" });
+    authority.dispatch({ kind: "observe", subjectId: "r-sn", category: "route" });
+    authority.dispatch({ kind: "observe", subjectId: "r-hs", category: "hazard" });
+    authority.dispatch({ kind: "observe", subjectId: "r-hs", category: "condition" });
     authority.dispatch({ kind: "travel", routeId: "r-hs" });
     authority.dispatch({ kind: "resolve-return" });
     const user = userEvent.setup();
@@ -123,10 +125,35 @@ describe("player-facing browser prototype", () => {
       name: "Choose Reports for the Atlas",
     }).parentElement!;
     const boxes = within(publication).getAllByRole("checkbox");
-    for (const box of boxes) await user.click(box);
+    expect(boxes).toHaveLength(4);
+    await user.click(boxes[0]!);
+    await user.click(boxes[1]!);
+    await user.click(boxes[2]!);
+    expect(boxes[3]).toBeDisabled();
+    await user.click(boxes[0]!);
+    expect(boxes[3]).toBeEnabled();
+    await user.click(boxes[3]!);
     await user.click(screen.getByRole("button", { name: "Publish selected Reports" }));
-    expect(screen.getAllByRole("article")).toHaveLength(6 + boxes.length);
-    expect(screen.getAllByText(/Published to Atlas/)).toHaveLength(boxes.length);
+    expect(screen.getAllByRole("article")).toHaveLength(9);
+    expect(screen.getAllByText(/Published to Atlas/)).toHaveLength(3);
+  });
+
+  it("reports actual salvage effects without revealing exact values before salvage", async () => {
+    const storage = new MemoryStorage();
+    const user = userEvent.setup();
+    render(<App storage={storage} />);
+    await user.click(screen.getByRole("button", { name: "Start Expedition" }));
+    await user.click(screen.getByRole("button", { name: "Travel toward Whisper Shoal" }));
+    expect(
+      screen.getByRole("button", { name: "Salvage Provision Cache at Whisper Shoal" }),
+    ).not.toHaveTextContent(/\b2\b/);
+    await user.click(
+      screen.getByRole("button", { name: "Salvage Provision Cache at Whisper Shoal" }),
+    );
+    await user.click(screen.getByRole("tab", { name: "Activity" }));
+    expect(
+      screen.getAllByText("Provision cache: spent 1 Provision, recovered 2, net +1."),
+    ).toHaveLength(2);
   });
 
   it("keeps Publish nothing legal", async () => {
