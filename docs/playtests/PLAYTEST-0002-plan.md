@@ -2,9 +2,11 @@
 
 ## Status and purpose
 
-This is a test plan, not a result. PLAYTEST-0002 has not yet occurred. Its purpose is to test whether
-the Revision 0.2 candidate corrects the first playtest's comprehension, purpose, evidence, resource,
-reward, summary, and second-Expedition failures while preserving the map's appeal.
+This is the predeclared test plan, preserved separately from the result. PLAYTEST-0002 has occurred;
+its evidence is recorded in [PLAYTEST-0002: Revision 0.2 Owner Playtest](PLAYTEST-0002-owner.md). The
+plan's purpose was to test whether the Revision 0.2 candidate corrected the first playtest's
+comprehension, purpose, evidence, resource, reward, summary, and second-Expedition failures while
+preserving the map's appeal.
 
 ## Clean start
 

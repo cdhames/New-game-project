@@ -13,14 +13,19 @@ These documents define the current project baseline. More specific decision reco
 - [Core Loop and Systems](design/CORE_LOOP_AND_SYSTEMS.md) — authoritative system-level design, terminology, and launch/future boundaries.
 - [MVP Specification](design/MVP_SPEC.md) — scoped first playable vertical slice, tuning parameters, acceptance tests, and reconsideration gates.
 - [Revision 0.2 Playtest Response](design/REVISION_0.2_PLAYTEST_RESPONSE.md) — authoritative
-  provisional redesign direction following the first browser playtest.
+  implemented response to the first browser playtest and its failed engagement-gate result.
+- [Revision 0.3 Adventure-First Pivot](design/REVISION_0.3_ADVENTURE_FIRST_PIVOT.md) — bounded,
+  unimplemented Bell Beneath North Mark experiment responding to the second owner playtest.
 
 ## Playtests
 
 - [PLAYTEST-0001: First Owner Browser Playtest](playtests/PLAYTEST-0001-owner.md) — direct player
   observations, project-lead diagnosis, resulting decisions, and questions for later testing.
-- [PLAYTEST-0002 Plan](playtests/PLAYTEST-0002-plan.md) — clean-start procedure, owner tasks,
-  comprehension questions, and Revision 0.2 evidence gate; no result has been recorded.
+- [PLAYTEST-0002 Plan](playtests/PLAYTEST-0002-plan.md) — the predeclared clean-start procedure,
+  owner tasks, questions, and Revision 0.2 evidence gate.
+- [PLAYTEST-0002: Revision 0.2 Owner Playtest](playtests/PLAYTEST-0002-owner.md) — direct owner
+  observations, failed engagement/core-fantasy gate, resulting adventure-first decision, and open
+  questions.
 
 ## Architecture and validation
 

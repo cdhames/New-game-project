@@ -6,12 +6,15 @@ Build the smallest vertical slice that can disprove or support the player-author
 
 ## Browser validation status
 
-The [first owner browser playtest](../playtests/PLAYTEST-0001-owner.md) failed the comprehension,
-motivation, interface, and strategic-depth gates. The map and exploration premise remain a positive
-signal, but Phase 1 cannot be considered complete until the substantial
-[Revision 0.2 response](REVISION_0.2_PLAYTEST_RESPONSE.md) is implemented, technically validated,
-and tested by the owner. Its technical candidate now exists on the feature branch, but Phase 1
-remains open until PLAYTEST-0002 evidence is conducted and reviewed.
+The [first owner browser playtest](../playtests/PLAYTEST-0001-owner.md) failed comprehension,
+motivation, interface, and strategic-depth gates. Revision 0.2 was subsequently implemented and
+technically validated on the unmerged feature branch. The
+[second owner playtest](../playtests/PLAYTEST-0002-owner.md) confirmed that its interface was cleaner
+and easier to understand, but the retrieve-file-upgrade loop still failed the engagement and
+core-fantasy gate. Phase 1 remains open while the bounded, unimplemented
+[Revision 0.3 adventure-first experiment](REVISION_0.3_ADVENTURE_FIRST_PIVOT.md) tests whether the map
+and uncertain-knowledge premise can support a compelling mystery, encounter, discovery, capability
+reward, and strategic reveal decision.
 
 ## Proof obligations
 
@@ -89,3 +92,9 @@ Players can explain the difference between Observation, Report, Atlas, and Groun
 ## Reconsideration conditions
 
 Reconsider the concept—not merely tune it—if repeated prototype tests show that players cannot form useful trust judgments; Atlas evidence does not alter routes; publication has a stable obvious optimum or no felt value; Drift consistently feels arbitrary despite clear cues; the core loop requires a large live population; solo/bot activity cannot sustain corroboration honestly; deterministic constraints prevent viable design iteration; or accessible map alternatives remove essential understanding. Any decision to proceed despite such evidence requires a new decision record.
+
+PLAYTEST-0002 provides direct evidence that publication currently has little felt value, Drift feels
+arbitrary, and the foreground activity resembles a workflow. One bounded core-fantasy pivot is
+authorized before reconsideration. If The Bell Beneath North Mark still feels primarily like a
+workflow or does not create credible desire for another Expedition, implementation pauses before
+further expansion.

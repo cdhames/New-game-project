@@ -20,13 +20,22 @@ This evidence-gated roadmap makes no calendar promises. Each phase can pause, na
 
 **Validation gate:** deterministic acceptance targets and basic usability loop pass without network or database.
 
-**Current evidence:** the deterministic core and first browser prototype exist, but the first owner
-browser playtest failed comprehension, motivation, interface coherence, and strategic-depth gates.
-The Revision 0.2 technical candidate now implements its resource, purpose, route-evidence, guidance,
-and outcome-summary response. Phase 1 remains open pending complete validation and the planned
-[second owner playtest](../playtests/PLAYTEST-0002-plan.md), whose evidence has not yet been recorded.
+**Current evidence:** the deterministic core and Revision 0.2 browser prototype are technically
+complete on the unmerged feature branch. Revision 0.2 improved interface structure, route evidence,
+resource explanations, and outcome clarity. The
+[second owner playtest](../playtests/PLAYTEST-0002-owner.md) nevertheless failed the engagement and
+core-fantasy gate: the loop felt like data retrieval and administrative filing, with weak world
+feedback and no compelling emotional reason for another Expedition.
 
-**Pause/revise if:** uncertainty is unintelligible, choices collapse, replay cannot remain deterministic, or scope exceeds a small slice.
+Phase 1 remains open. One bounded, unimplemented
+[Revision 0.3 adventure-first experiment](../design/REVISION_0.3_ADVENTURE_FIRST_PIVOT.md) is
+authorized around The Bell Beneath North Mark. It must test a concrete encounter, named discovery,
+capability reward, visible Atlas and Drift change, strategic reveal choice, and one simulated outside
+claim before any broader content, social, or infrastructure expansion.
+
+**Pause/revise if:** uncertainty is unintelligible, choices collapse, replay cannot remain
+deterministic, scope exceeds the bounded slice, or the adventure-first test still feels like a
+workflow and fails to create credible desire for another Expedition.
 
 ## Phase 2: Simulated shared Atlas and bot testing
 

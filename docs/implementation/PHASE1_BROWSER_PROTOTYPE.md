@@ -7,6 +7,14 @@ Map. It presents the existing deterministic Phase 1 core through React and Vite;
 duplicate authoritative rules into UI components. It is a local development artifact, not a hosted
 online game.
 
+Revision 0.2 is technically complete and validated on this unmerged feature branch. The
+[second owner playtest](../playtests/PLAYTEST-0002-owner.md) found the interface cleaner and easier to
+understand, but the overall experience still non-intuitive and insufficiently engaging. The
+retrieve-file-upgrade loop failed the core-fantasy gate; implementation success must not be read as
+product validation. Phase 1 remains open, and the
+[Revision 0.3 adventure-first pivot](../design/REVISION_0.3_ADVENTURE_FIRST_PIVOT.md) is a design-only,
+unimplemented bounded experiment.
+
 ## Implemented loop
 
 The interface supports every phase currently advertised by `PlayerSafeProjection.actions`: choosing
@@ -106,8 +114,8 @@ Arrow/Right Arrow selection.
 During an active Expedition the mission panel keeps Travel, Observe, Salvage, and Return in stable
 order. Unavailable categories remain present with a core-derived safe explanation. Return Reserve is
 identified as a known-route estimate rather than a safety guarantee, and salvage actions expose only
-their broad family until the sanitized result summary states the resolved value. Legal Travel buttons are
-generated only from `actions.traversableRouteIds` and known safe route descriptors inside the mission
+their broad family until the sanitized result summary states the resolved value. Legal Travel buttons
+are generated only from the authoritative `actions.travelOptions` collection inside the mission
 panel. The full known-topology text alternative remains in the Atlas tab as secondary reference. The
 SVG description points to the equivalent mission-panel controls.
 
@@ -214,6 +222,11 @@ Protocol, core, property, replay, simulation, smoke, and browser coverage now ex
 travel-option, route-evidence, Expedition-journal, outcome-summary, and terminal-transition rules.
 
 ## Known limitations and deferred work
+
+PLAYTEST-0002 established a product limitation more important than the technical items below: the
+foreground activity feels administrative, destinations lack memorable encounters, Atlas changes and
+Drift lack visible payoff, Findings mainly fund repetition, and the solo build does not yet express a
+shared world. Further incremental interface polish is not expected to solve that engagement problem.
 
 The prototype has one local player, one fixed scenario, provisional tuning, a compact activity
 history, and no secure separation between browser owner and hidden state. It does not implement an

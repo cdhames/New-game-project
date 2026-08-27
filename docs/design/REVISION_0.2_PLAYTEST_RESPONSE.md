@@ -2,10 +2,11 @@
 
 ## Status and evidence
 
-This document is the **authoritative provisional direction** for the second browser prototype. It
-responds to [PLAYTEST-0001](../playtests/PLAYTEST-0001-owner.md). It specifies planned work; none of
-the Revision 0.2 systems described here should be represented as implemented until corresponding
-code and validation exist.
+This document records the implemented response to
+[PLAYTEST-0001](../playtests/PLAYTEST-0001-owner.md) and the evidence from
+[PLAYTEST-0002](../playtests/PLAYTEST-0002-owner.md). Revision 0.2 is technically complete on the
+unmerged feature branch. Its interface and structural improvements remain useful, but it failed the
+engagement and core-fantasy gate.
 
 The player-authored Atlas, hidden Ground truth, deterministic game core, player-safe projection, and
 short-Expedition premise remain authoritative. The first playtest supports preserving the
@@ -15,11 +16,18 @@ do not yet satisfy Phase 1.
 All numeric values in this document are reversible initial tuning parameters, not permanent design
 law.
 
-**Implementation status:** The Revision 0.2 technical candidate is implemented on the feature branch:
-the shell, resources, Commissions, preparation, player-safe route evidence and projected return
-consequences, contextual guidance, authoritative Expedition journal, and return/failure/finalized
-outcome summaries. Automated and browser validation must pass before this status is considered final.
-The second owner playtest has not occurred, and Phase 1 remains open until its evidence is reviewed.
+**Final status:** The shell, resources, Commissions, preparation, player-safe route evidence,
+projected return consequences, contextual guidance, authoritative Expedition journal, and
+return/failure/finalized summaries are implemented and technically validated. PLAYTEST-0002 occurred.
+The cleaner interface did not make the game compelling: Findings felt repetitive, Atlas change lacked
+payoff, Drift remained opaque, and Report filing made the foreground fantasy feel administrative.
+Revision 0.2 therefore passes its technical and interface-structure gates but fails its engagement,
+emotional-payoff, and second-Expedition gates. Phase 1 remains open.
+
+Further incremental polishing of the retrieve-file-upgrade loop is not the approved response. The
+bounded [Revision 0.3 adventure-first pivot](REVISION_0.3_ADVENTURE_FIRST_PIVOT.md) will test one
+named mystery, encounter, discovery, capability reward, visible Drift event, outside claim, and
+consequential reveal-or-withhold choice. Revision 0.3 is not implemented.
 
 ## 1. Desktop information architecture
 
@@ -222,7 +230,7 @@ No stage below is implemented by this document.
 | 4 | Implemented on this branch | Return Reserve, base Provisions, instrument Charges, salvage cost, Vessel Integrity, restoration and warnings | Protocol and game core for rules/projection; browser for explanation and warnings |
 | 5 | Implemented on this branch | Player-safe route-evidence projection and decision-time presentation | Protocol/game core filtering; browser presentation |
 | 6 | Implemented on this branch | Temporary preparation and comprehensive Expedition summaries | Protocol/game core for outcomes and purchases; browser summary and preparation UI |
-| 7 | Candidate validation in progress | Unit, property, replay, simulation, browser, responsive and accessibility validation; second owner playtest remains pending | All affected packages and browser; documentation for evidence |
+| 7 | Complete; engagement gate failed | Unit, property, replay, simulation, browser, responsive and accessibility validation completed; PLAYTEST-0002 recorded a failed engagement/core-fantasy result | All affected packages, browser, and playtest evidence |
 
 Stages that change commands, events, canonical state, deterministic rules, resource accounting,
 Commission state, reward state, or safe projections require protocol/game-core work and replay
@@ -231,6 +239,10 @@ data are browser-only. Browser code must not independently decide authoritative 
 hidden state.
 
 ## Unresolved risks and later evidence
+
+PLAYTEST-0002 resolved the central Revision 0.2 risk negatively: improved clarity did not create a
+credible emotional reason for another Expedition. The following implementation-local risks remain
+documented, but tuning them is not expected to repair the failed foreground fantasy:
 
 - The preparation costs may create an obvious purchase order or trivialize return pressure.
 - Return Reserve may be mistaken for a safety guarantee unless uncertainty language is effective.
