@@ -5,6 +5,8 @@
 This branch establishes the first deterministic, headless implementation. It proves that a compact
 versioned scenario can execute ordinary protocol commands, emit ordered replayable events, preserve
 hidden Ground truth behind a player-safe projection, and run reproducible seeded bot cohorts.
+Stage 1 of Revision 0.3 also proves the bounded Bell adventure through deterministic scripted paths;
+it does not claim that adventure is yet player-facing.
 
 It does not prove player comprehension, usability, accessibility, balance, persistent authority,
 network security, scalability, or production readiness. Phase 1 is not declared complete.
@@ -12,15 +14,38 @@ network security, scalability, or production readiness. Phase 1 is not declared 
 ## Package boundaries
 
 - `packages/protocol` owns serializable identifiers, commands, events, rejections, Observation,
-  Report, Trace, projection, and replay contracts. Zod validates protocol inputs at runtime.
+  Report, Trace, adventure-domain, projection, and replay contracts. Zod validates protocol inputs
+  at runtime.
 - `packages/game-core` owns canonical mutable Ground truth initialized from the hidden scenario,
   injected xorshift32 RNG, command
   decisions, immutable-style evolution, replay, canonical serialization, checksums, and projections.
 - `packages/sim` sees player-safe projections, enumerates ordinary commands, applies them through the
-  same core boundary, retains replay data, and aggregates cohort metrics.
+  same core boundary, retains replay data, aggregates cohort metrics, and runs the four Bell paths.
 
 No package depends on React, browser or DOM APIs, a network, database, filesystem, environment
 variables, wall-clock time, or ambient randomness for game outcomes.
+
+## Revision 0.3 Bell slice
+
+The fresh safe projection exposes exactly one primary Lead, `The Bell Beneath North Mark`, in the
+aftermath of a recent Drift. The explicit adventure start reuses the Revision 0.2 bounded preparation
+and Expedition machinery. Reaching North Mark activates a single-use encounter whose availability
+and command validation share predicates. Listen, Sounding Line, Weather Glass, Field Lens, descent,
+and withdrawal implement the fixed costs and 2-or-1 descent damage recorded in
+[ADR-0008](../decisions/ADR-0008-bell-adventure-domain-model.md).
+
+Successful recovery banks the Resonant Waystone Fragment and Resonance Compass, then requires a
+share/withhold decision after return. The resulting public/private knowledge, Mara Venn simulated
+claim, next Lead, and pending visible North Mark Drift are deterministic and replayable. Incomplete
+return and zero-Integrity failure retain truthful partial clues without granting the capability.
+The Compass provides only a safe `r-nd` acoustic-signature clue and a deterministic future tune
+affordance; it exposes no hidden hazard or condition.
+
+`runBellAdventurePath` executes careful-share, careful-withhold, early-withdrawal, and risky-failure
+command streams exclusively through protocol-5 parsing and `applyCommand`. Command and event replay
+reconstruct the same terminal state, and repeated paths produce byte-identical canonical and safe
+projection output. The older simulation policies and Revision 0.2 core path remain intact as
+temporary parallel support during the bounded experiment.
 
 ## Command, event, RNG, and replay lifecycle
 
@@ -49,10 +74,10 @@ security.
 
 ## Scenario and provisional tuning
 
-Scenario `1.3.0` is an original compact archipelago with 12 nodes, 18 routes, one Waystation, two
+Scenario `1.4.0` is an original compact archipelago with 12 nodes, 18 routes, one Waystation, two
 hidden routes, route hazards and conditions, node opportunities, and six mixed-quality baseline
 Reports with initial ages 6, 4, 3, 2, 1, and 0 logical steps. One hidden route is known through a
-baseline route Report; the other remains unrevealed. Protocol 4 Expeditions choose two instruments,
+baseline route Report; the other remains unrevealed. Protocol 5 Expeditions choose two instruments,
 begin with 8 Provisions, 4 Vessel Integrity, and 2 Charges for each selected instrument. Travel costs
 1 Provision, Observation costs 1 matching Charge, and salvage costs 1 Provision before applying its
 typed result. A Trace contains at most half of eligible lost unbanked Findings.

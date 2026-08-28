@@ -12,6 +12,7 @@ import { PROTOCOL_VERSION, PlayerCommandSchema, type PlayerCommand } from "@long
 import {
   legalCommands,
   replayCommands,
+  runBellAdventurePath,
   runExpedition,
   SimulationInvariantError,
   smokeStudy,
@@ -231,5 +232,135 @@ describe("headless simulation", () => {
 
   it("is deterministic across repeated smoke studies", () => {
     expect(smokeStudy(25)).toEqual(smokeStudy(25));
+  });
+});
+
+describe("Bell adventure headless paths", () => {
+  it.each([
+    ["careful-shared-discovery", "shared", "lead-follow-divided-resonance"],
+    ["careful-private-discovery", "withheld", "lead-return-before-rival-charts-bell"],
+    ["early-withdrawal", "incomplete", "lead-return-before-rival-charts-bell"],
+    ["risky-failed-descent", "failed", "lead-bell-beneath-north-mark"],
+  ] as const)("replays %s through commands and events", (path, outcome, nextLeadId) => {
+    const run = runBellAdventurePath(path);
+    expect(run.projection.adventure.latestResolution?.outcome).toBe(outcome);
+    expect(run.projection.adventure.availableLead?.id).toBe(nextLeadId);
+    expect(run.commandReplayMatches).toBe(true);
+    expect(run.eventReplayMatches).toBe(true);
+    expect(run.commands.every((command) => command.protocolVersion === PROTOCOL_VERSION)).toBe(
+      true,
+    );
+    const repeated = runBellAdventurePath(path);
+    expect(repeated.canonicalOutput).toBe(run.canonicalOutput);
+    expect(repeated.projectionOutput).toBe(run.projectionOutput);
+  });
+
+  it("keeps shared and private consequences distinct and Mara explicitly simulated", () => {
+    const shared = runBellAdventurePath("careful-shared-discovery").projection.adventure;
+    const withheld = runBellAdventurePath("careful-private-discovery").projection.adventure;
+    expect(shared.publicAnnotations).toEqual(
+      expect.arrayContaining([expect.objectContaining({ subjectId: "r-nd", traversable: false })]),
+    );
+    expect(shared.privateAcousticRouteClue).toBeNull();
+    expect(withheld.publicAnnotations).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ subjectId: "r-nd" })]),
+    );
+    expect(withheld.privateAcousticRouteClue).toMatchObject({ routeId: "r-nd" });
+    for (const claim of [...shared.outsideClaims, ...withheld.outsideClaims])
+      expect(claim).toMatchObject({
+        actorId: "actor-mara-venn-simulated",
+        actorDisplayName: "Mara Venn — simulated expedition source",
+        sourceType: "simulated-prototype",
+        subjectId: "r-nr",
+      });
+    expect(shared.outsideClaims[0]?.quality).toBe("medium");
+    expect(withheld.outsideClaims[0]?.quality).toBe("low");
+    expect(shared.outsideClaims[0]).not.toEqual(withheld.outsideClaims[0]);
+    expect(shared.publicResonanceEvidenceState).toBe("conflicting-values");
+    expect(withheld.publicResonanceEvidenceState).toBe("single-value");
+    expect(withheld.outsideClaims[0]?.potentiallyStale).toBe(true);
+  });
+
+  it("applies a safe visible North Mark Drift and retains capability/discovery rules", () => {
+    const shared = runBellAdventurePath("careful-shared-discovery");
+    expect(shared.state.revision).toBe(1);
+    expect(shared.projection.adventure.visibleDriftEvent).toMatchObject({
+      id: "drift-event-north-mark-resonance",
+      affectedRegionId: "north-mark",
+      pendingAcknowledgement: false,
+      explanation: "The world changed, so some old knowledge may no longer be reliable.",
+    });
+    const disclosureEvent = shared.events.find(
+      (event) => event.kind === "discovery-disclosure-resolved",
+    );
+    const disclosureSnapshot = disclosureEvent?.payload["canonicalState"] as
+      CanonicalState | undefined;
+    expect(disclosureSnapshot?.adventure.visibleDriftEvent).toMatchObject({
+      pendingAcknowledgement: true,
+      affectedRegionId: "north-mark",
+    });
+    expect(disclosureSnapshot?.adventure.visibleDriftEvent?.potentiallyStaleClaimIds).toContain(
+      "annotation-resonance-r-nd",
+    );
+    expect(shared.projection.adventure.capabilities).toEqual([
+      expect.objectContaining({ id: "capability-resonance-compass" }),
+    ]);
+    expect(shared.projection.adventure.discoveries).toEqual([
+      expect.objectContaining({ id: "discovery-resonant-waystone-fragment", public: true }),
+    ]);
+
+    const withdrawn = runBellAdventurePath("early-withdrawal").projection.adventure;
+    expect(withdrawn.latestResolution).toMatchObject({
+      discoveryRecovered: false,
+      capabilityUnlocked: false,
+    });
+    expect(withdrawn.capabilities).toEqual([]);
+
+    const failed = runBellAdventurePath("risky-failed-descent").projection.adventure;
+    expect(failed.latestResolution).toMatchObject({
+      outcome: "failed",
+      clueIds: ["clue-bell-interval"],
+      discoveryRecovered: false,
+      capabilityUnlocked: false,
+    });
+    expect(failed.disclosurePending).toBe(false);
+  });
+
+  it("exposes the Compass clue and tune action on the next Lead without exposing danger", () => {
+    const first = runBellAdventurePath("careful-private-discovery");
+    let state = accepted(first.state, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "followup-start",
+      kind: "start-lead-expedition",
+      leadId: "lead-return-before-rival-charts-bell",
+      instruments: ["sounding-line", "weather-glass"],
+      preparation: {
+        extraProvisions: 0,
+        reinforcedVesselIntegrity: false,
+        extraChargeInstruments: [],
+      },
+    });
+    state = accepted(state, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "followup-hs",
+      kind: "travel",
+      routeId: "r-hs",
+    });
+    state = accepted(state, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "followup-sn",
+      kind: "travel",
+      routeId: "r-sn",
+    });
+    const safe = createPlayerProjection(state);
+    expect(safe.adventure.privateAcousticRouteClue).toMatchObject({ routeId: "r-nd" });
+    expect(safe.adventure.encounter?.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "tune-resonance-compass", available: true }),
+      ]),
+    );
+    expect(safe.adventure.privateAcousticRouteClue?.summary).not.toMatch(
+      /hazard [0-9]|condition [0-9]/,
+    );
   });
 });

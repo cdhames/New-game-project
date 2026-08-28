@@ -15,7 +15,8 @@ These documents define the current project baseline. More specific decision reco
 - [Revision 0.2 Playtest Response](design/REVISION_0.2_PLAYTEST_RESPONSE.md) — authoritative
   implemented response to the first browser playtest and its failed engagement-gate result.
 - [Revision 0.3 Adventure-First Pivot](design/REVISION_0.3_ADVENTURE_FIRST_PIVOT.md) — bounded,
-  unimplemented Bell Beneath North Mark experiment responding to the second owner playtest.
+  Bell Beneath North Mark experiment responding to the second owner playtest; Stage 1 deterministic
+  contracts and headless behavior are implemented, while the browser redesign is not.
 
 ## Playtests
 
@@ -51,6 +52,8 @@ These documents define the current project baseline. More specific decision reco
   deterministic Commission purpose, reward timing, temporary preparation, and Atlas Contribution.
 - [ADR-0007: Route evidence and Expedition outcomes](decisions/ADR-0007-route-evidence-and-expedition-outcomes.md) —
   authoritative travel options, conflicting historical claims, Expedition journals, outcome summaries, and protocol-4 transition.
+- [ADR-0008: Bell adventure domain model](decisions/ADR-0008-bell-adventure-domain-model.md) —
+  bounded parallel Lead and encounter model, discovery disclosure, simulated provenance, visible Drift, and protocol-5 transition.
 
 ## Decision labels
 

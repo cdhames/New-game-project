@@ -3,9 +3,11 @@ import fc from "fast-check";
 import {
   PROTOCOL_VERSION,
   PlayerCommandSchema,
+  SafeAdventureProjectionSchema,
   type DomainEvent,
   type ObservationRecord,
   type PlayerCommand,
+  type PreparationPlan,
   type ReportRecord,
 } from "@long-map/protocol";
 import {
@@ -37,6 +39,198 @@ const start = (id = "start-1"): PlayerCommand => ({
     reinforcedVesselIntegrity: false,
     extraChargeInstruments: [],
   },
+});
+
+describe("Revision 0.3 Bell adventure contracts", () => {
+  const preparation: PreparationPlan = {
+    extraProvisions: 0,
+    reinforcedVesselIntegrity: false,
+    extraChargeInstruments: [],
+  };
+  const applyAccepted = (state: CanonicalState, command: PlayerCommand): CanonicalState => {
+    const result = applyCommand(state, command);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    return result.state;
+  };
+  const atBell = (
+    instruments: [
+      "sounding-line" | "weather-glass" | "field-lens",
+      "sounding-line" | "weather-glass" | "field-lens",
+    ],
+    seed = 20_260_804,
+  ): CanonicalState => {
+    let state = createInitialState(seed);
+    for (const route of state.world.routes) route.hazard = 0;
+    state = applyAccepted(state, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: `bell-start-${instruments.join("-")}`,
+      kind: "start-lead-expedition",
+      leadId: "lead-bell-beneath-north-mark",
+      instruments,
+      preparation,
+    });
+    state = applyAccepted(state, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "bell-travel-hs",
+      kind: "travel",
+      routeId: "r-hs",
+    });
+    return applyAccepted(state, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "bell-travel-sn",
+      kind: "travel",
+      routeId: "r-sn",
+    });
+  };
+  const encounter = (
+    state: CanonicalState,
+    commandId: string,
+    actionId: Extract<PlayerCommand, { kind: "perform-encounter-action" }>["actionId"],
+  ): CanonicalState =>
+    applyAccepted(state, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId,
+      kind: "perform-encounter-action",
+      actionId,
+    });
+
+  it("projects the bounded Lead safely and activates a blocking encounter at known North Mark", () => {
+    const initial = createInitialState(1);
+    const opening = createPlayerProjection(initial);
+    expect(opening).toMatchObject({ protocolVersion: 5, scenarioVersion: "1.4.0" });
+    expect(SafeAdventureProjectionSchema.safeParse(opening.adventure).success).toBe(true);
+    expect(opening.adventure.primaryLead).toMatchObject({
+      id: "lead-bell-beneath-north-mark",
+      targetLocationId: "north-mark",
+    });
+    expect(opening.adventure.primaryLead.premise).toContain("claims disagree");
+    expect(opening.adventure.primaryLead.rewardSummary).toContain("new capability");
+    expect(opening.adventure.aftermathOfRecentDrift).toBe(true);
+    expect(JSON.stringify(opening.adventure)).not.toContain("resonant-waystone-fragment");
+
+    const state = atBell(["sounding-line", "field-lens"]);
+    const projection = createPlayerProjection(state);
+    expect(projection.locationId).toBe("north-mark");
+    expect(projection.adventure.encounter).toMatchObject({
+      id: "encounter-bell-north-mark",
+      phase: "active",
+    });
+    expect(projection.actions.travelOptions).toEqual([]);
+    expect(projection.actions.observations).toEqual([]);
+    expect(projection.actions.salvageableOpportunities).toEqual([]);
+    expect(projection.adventure.encounter?.instruction).toContain("Resolve or withdraw");
+  });
+
+  it("uses one authoritative encounter predicate for instruments, depletion, and single use", () => {
+    const state = atBell(["sounding-line", "field-lens"]);
+    const weather = createPlayerProjection(state).adventure.encounter!.actions.find(
+      (action) => action.id === "separate-current-weather-glass",
+    )!;
+    expect(weather).toMatchObject({
+      available: false,
+      unavailableReason: "instrument-not-selected",
+      instrumentChargeCost: 1,
+      provisionCost: 0,
+    });
+    const rejectedWeather = applyCommand(state, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "bell-weather-rejected",
+      kind: "perform-encounter-action",
+      actionId: "separate-current-weather-glass",
+    });
+    expect(rejectedWeather).toMatchObject({ ok: false, reason: "encounter-action-unavailable" });
+
+    const listened = encounter(state, "bell-listen", "listen-surface");
+    expect(listened.adventure.clueIds).toEqual(["clue-bell-interval"]);
+    expect(listened.expedition?.provisions).toBe(state.expedition?.provisions);
+    const repeated = applyCommand(listened, {
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "bell-listen-repeat",
+      kind: "perform-encounter-action",
+      actionId: "listen-surface",
+    });
+    expect(repeated).toMatchObject({ ok: false, reason: "encounter-action-unavailable" });
+
+    const depleted = structuredClone(state);
+    depleted.expedition!.instrumentCharges["sounding-line"]!.current = 0;
+    const sounding = createPlayerProjection(depleted).adventure.encounter!.actions.find(
+      (action) => action.id === "triangulate-sounding-line",
+    )!;
+    expect(sounding).toMatchObject({ available: false, unavailableReason: "instrument-depleted" });
+  });
+
+  it("applies exact instrument costs and bounded descent mitigation", () => {
+    const soundingStart = atBell(["sounding-line", "field-lens"]);
+    const sounding = encounter(soundingStart, "bell-triangulate", "triangulate-sounding-line");
+    expect(sounding.expedition?.provisions).toBe(soundingStart.expedition!.provisions - 1);
+    expect(sounding.expedition?.instrumentCharges["sounding-line"]?.current).toBe(1);
+    expect(sounding.adventure.clueIds).toContain("clue-fractured-shelf");
+    const soundingBeforeDescent = sounding.expedition!.vesselIntegrity;
+    const soundingDescent = encounter(sounding, "bell-descend-sounding", "descend-into-resonance");
+    expect(soundingDescent.expedition?.vesselIntegrity).toBe(soundingBeforeDescent - 1);
+
+    const weatherStart = atBell(["weather-glass", "field-lens"]);
+    const weather = encounter(
+      weatherStart,
+      "bell-separate-current",
+      "separate-current-weather-glass",
+    );
+    expect(weather.expedition?.provisions).toBe(weatherStart.expedition?.provisions);
+    expect(weather.expedition?.instrumentCharges["weather-glass"]?.current).toBe(1);
+    const weatherBeforeDescent = weather.expedition!.vesselIntegrity;
+    const weatherDescent = encounter(weather, "bell-descend-weather", "descend-into-resonance");
+    expect(weatherDescent.expedition?.vesselIntegrity).toBe(weatherBeforeDescent - 1);
+
+    const lensStart = atBell(["field-lens", "sounding-line"]);
+    const lens = encounter(lensStart, "bell-inspect", "inspect-debris-field-lens");
+    expect(lens.expedition?.instrumentCharges["field-lens"]?.current).toBe(1);
+    expect(lens.expedition?.provisions).toBe(lensStart.expedition?.provisions);
+    expect(lens.adventure.clueIds).toContain("clue-worked-stone");
+
+    const unmitigatedStart = encounter(
+      atBell(["field-lens", "sounding-line"]),
+      "bell-listen-unmitigated",
+      "listen-surface",
+    );
+    const unmitigatedIntegrity = unmitigatedStart.expedition!.vesselIntegrity;
+    const unmitigated = encounter(
+      unmitigatedStart,
+      "bell-descend-unmitigated",
+      "descend-into-resonance",
+    );
+    expect(unmitigated.expedition?.vesselIntegrity).toBe(unmitigatedIntegrity - 2);
+
+    let combined = atBell(["sounding-line", "weather-glass"]);
+    combined = encounter(combined, "bell-combined-sounding", "triangulate-sounding-line");
+    combined = encounter(combined, "bell-combined-weather", "separate-current-weather-glass");
+    const combinedIntegrity = combined.expedition!.vesselIntegrity;
+    combined = encounter(combined, "bell-combined-descent", "descend-into-resonance");
+    expect(combined.expedition?.vesselIntegrity).toBe(combinedIntegrity - 1);
+    expect(combined.adventure.discoveryRecovered).toBe(true);
+    expect(combined.adventure.capabilityIds).toEqual(["capability-resonance-compass"]);
+    expect(combined.adventure.clueIds).toContain("clue-submerged-waystone");
+  });
+
+  it("keeps the Compass clue player-safe and hidden route truth absent", () => {
+    let state = atBell(["sounding-line", "weather-glass"]);
+    state = encounter(state, "bell-safe-listen", "listen-surface");
+    state = encounter(state, "bell-safe-descend", "descend-into-resonance");
+    state.adventure.privateAcousticRouteClue = true;
+    state.world.routes.find((route) => route.id === "r-nd")!.hazard = 987;
+    state.world.routes.find((route) => route.id === "r-nd")!.condition = 876;
+    const safe = createPlayerProjection(state);
+    expect(safe.adventure.capabilities).toEqual([
+      expect.objectContaining({ id: "capability-resonance-compass" }),
+    ]);
+    expect(safe.adventure.privateAcousticRouteClue).toMatchObject({ routeId: "r-nd" });
+    expect(safe.adventure.privateAcousticRouteClue?.summary).toContain(
+      "nothing about route hazard",
+    );
+    expect(JSON.stringify(safe)).not.toContain("987");
+    expect(JSON.stringify(safe)).not.toContain("876");
+    expect(JSON.stringify(safe)).not.toContain("r-ol");
+  });
 });
 const observation = (id: string, expeditionId = "expedition-1"): ObservationRecord => ({
   id,
@@ -114,12 +308,12 @@ const returnedState = (observations: ObservationRecord[]): CanonicalState => {
 };
 
 describe("deterministic expedition core", () => {
-  it("accepts protocol 4 commands and rejects protocol 3 commands", () => {
+  it("accepts protocol 5 commands and rejects protocol 4 commands", () => {
     expect(PlayerCommandSchema.safeParse(start()).success).toBe(true);
-    expect(PlayerCommandSchema.safeParse({ ...start(), protocolVersion: 3 }).success).toBe(false);
+    expect(PlayerCommandSchema.safeParse({ ...start(), protocolVersion: 4 }).success).toBe(false);
     expect(createInitialState(1)).toMatchObject({
       protocolVersion: PROTOCOL_VERSION,
-      scenarioVersion: "1.3.0",
+      scenarioVersion: "1.4.0",
     });
   });
   it("starts with the Revision 0.2 loadout and spends Charges rather than Provisions", () => {

@@ -217,7 +217,7 @@ describe("local browser authority", () => {
       JSON.stringify({
         version: LOCAL_RECORD_VERSION,
         protocolVersion: PROTOCOL_VERSION,
-        scenarioVersion: "1.3.0",
+        scenarioVersion: "1.4.0",
         seed: DEFAULT_DEVELOPMENT_SEED,
         commands: [
           {
@@ -253,7 +253,7 @@ describe("local browser authority", () => {
       JSON.stringify({
         version: LOCAL_RECORD_VERSION,
         protocolVersion: PROTOCOL_VERSION,
-        scenarioVersion: "1.3.0",
+        scenarioVersion: "1.4.0",
         seed: DEFAULT_DEVELOPMENT_SEED,
         commands: [
           {

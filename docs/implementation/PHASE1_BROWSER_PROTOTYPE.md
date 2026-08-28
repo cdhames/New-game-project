@@ -12,8 +12,9 @@ Revision 0.2 is technically complete and validated on this unmerged feature bran
 understand, but the overall experience still non-intuitive and insufficiently engaging. The
 retrieve-file-upgrade loop failed the core-fantasy gate; implementation success must not be read as
 product validation. Phase 1 remains open, and the
-[Revision 0.3 adventure-first pivot](../design/REVISION_0.3_ADVENTURE_FIRST_PIVOT.md) is a design-only,
-unimplemented bounded experiment.
+[Revision 0.3 adventure-first pivot](../design/REVISION_0.3_ADVENTURE_FIRST_PIVOT.md) now has a
+deterministic Stage 1 Bell model and headless coverage. The adventure-first browser redesign remains
+unimplemented; this interface deliberately continues to foreground the Revision 0.2 flow.
 
 ## Implemented loop
 
@@ -41,9 +42,9 @@ for a competitive, shared, persistent, or production world.
 
 ## Command-log persistence
 
-The current localStorage key is `the-long-map.local-prototype.v4`. Its value stores only:
+The current localStorage key is `the-long-map.local-prototype.v5`. Its value stores only:
 
-- local record version `4`, protocol version `4`, and scenario version `1.3.0`;
+- local record version `5`, protocol version `5`, and scenario version `1.4.0`;
 - deterministic initial seed;
 - accepted, schema-valid `PlayerCommand` values in order.
 
@@ -63,9 +64,9 @@ accepted command list, and the sequence number in memory. A localStorage write f
 authority aligned with persisted history and presents a safe retry message. Domain events, canonical
 snapshots, and arbitrary React state are not persisted.
 
-If v4 is absent but a known v1, v2, or v3 key exists, loading fails closed with a rules-version
+If v5 is absent but a known v1, v2, v3, or v4 key exists, loading fails closed with a rules-version
 recovery screen and leaves every legacy record untouched. No speculative outcome migration is
-attempted. Confirmed reset removes only the known v1, v2, v3, and v4 Long Map keys and creates a fresh deterministic
+attempted. Confirmed reset removes only the known v1, v2, v3, v4, and v5 Long Map keys and creates a fresh deterministic
 world. The App increments an explicit authority generation and remounts the view-owning game shell,
 so a valid active session immediately displays the new fresh projection instead of retaining the
 previous shell's initialized view. Unrelated localStorage values are untouched.
@@ -218,8 +219,10 @@ Lifecycle regressions also cover returned Commission wording, Verify Report elig
 non-selection, storage-failed publication retry, and cleanup only after accepted terminal
 transitions.
 
-Protocol, core, property, replay, simulation, smoke, and browser coverage now exercise the version-4
+Protocol, core, property, replay, simulation, smoke, and browser coverage retain the Revision 0.2
 travel-option, route-evidence, Expedition-journal, outcome-summary, and terminal-transition rules.
+Protocol-5 core and headless coverage additionally exercise the Bell Lead and encounter; the browser
+does not yet render those new commands as its primary flow.
 
 ## Known limitations and deferred work
 

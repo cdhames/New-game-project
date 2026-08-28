@@ -10,6 +10,7 @@ import {
   LEGACY_LOCAL_RECORD_KEY,
   LEGACY_LOCAL_RECORD_KEY_V2,
   LEGACY_LOCAL_RECORD_KEY_V3,
+  LEGACY_LOCAL_RECORD_KEY_V4,
   LOCAL_RECORD_KEY,
   LOCAL_RECORD_VERSION,
   type LocalAuthority,
@@ -126,21 +127,24 @@ describe("player-facing browser prototype", () => {
     expect(screen.getByLabelText("Active Commission")).toHaveTextContent("Progress: Active");
   });
 
-  it("leaves v1, v2, and v3 histories untouched until targeted confirmation", async () => {
+  it("leaves v1, v2, v3, and v4 histories untouched until targeted confirmation", async () => {
     const storage = new MemoryStorage();
     storage.setItem(LEGACY_LOCAL_RECORD_KEY, "v1");
     storage.setItem(LEGACY_LOCAL_RECORD_KEY_V2, "v2");
     storage.setItem(LEGACY_LOCAL_RECORD_KEY_V3, "v3");
+    storage.setItem(LEGACY_LOCAL_RECORD_KEY_V4, "v4");
     storage.setItem("unrelated", "keep");
     const user = userEvent.setup();
     render(<App storage={storage} confirmReset={() => true} />);
     expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY)).toBe("v1");
     expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY_V2)).toBe("v2");
     expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY_V3)).toBe("v3");
+    expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY_V4)).toBe("v4");
     await user.click(screen.getByRole("button", { name: "Reset local prototype" }));
     expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY)).toBeNull();
     expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY_V2)).toBeNull();
     expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY_V3)).toBeNull();
+    expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY_V4)).toBeNull();
     expect(storage.getItem("unrelated")).toBe("keep");
   });
   it("renders the title, six Reports, three instruments, safe map, and legitimately known hidden route", () => {
@@ -414,9 +418,7 @@ describe("player-facing browser prototype", () => {
     storage.setItem("unrelated", "preserve-me");
     const user = userEvent.setup();
     render(<App storage={storage} confirmReset={() => true} />);
-    expect(
-      screen.getByText(/Route evidence and Expedition outcome rules changed/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Adventure rules changed in version 5/i)).toBeInTheDocument();
     expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY)).not.toBeNull();
     await user.click(screen.getByRole("button", { name: "Reset local prototype" }));
     expect(storage.getItem(LEGACY_LOCAL_RECORD_KEY)).toBeNull();

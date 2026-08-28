@@ -3,7 +3,10 @@
 ## Status and evidence
 
 This document defines one **provisional, reversible, bounded design experiment** in response to
-[PLAYTEST-0002](../playtests/PLAYTEST-0002-owner.md). Revision 0.3 is not implemented. It does not
+[PLAYTEST-0002](../playtests/PLAYTEST-0002-owner.md). Stage 1 deterministic contracts, core behavior,
+replay, and headless paths are implemented under
+[ADR-0008](../decisions/ADR-0008-bell-adventure-domain-model.md); the polished adventure-first browser
+interface is not implemented. Revision 0.3 does not
 authorize map expansion, a general encounter framework beyond the slice, networking, or production
 infrastructure.
 
@@ -239,9 +242,10 @@ Revision 0.3 preserves deterministic core authority, player-safe projection, com
 hidden Ground truth, local prototype persistence, browser accessibility, and the responsive
 single-screen shell.
 
-Implementation may require versioned protocol and canonical structures for Lead, encounter, choice,
-discovery, capability unlock, reveal/withhold decision, simulated outside claim, and visible Drift
-event. Those structures are not implemented by this document. The slice adds no API, database,
+Protocol 5 and scenario 1.4.0 now provide versioned canonical and player-safe structures for Lead,
+encounter, choice, discovery, capability unlock, reveal/withhold decision, simulated outside claim,
+and visible Drift event. Stage 1 exercises them through the deterministic core and four headless
+paths while retaining the Revision 0.2 browser foreground. The slice adds no API, database,
 hosted service, account system, telemetry, network multiplayer, secrets, or unrestricted player text.
 
 ## Bounded acceptance criteria
@@ -304,4 +308,3 @@ Existing Revision 0.2 systems are treated as follows:
   direct evidence rather than silent normalization.
 - Preserving the shared-knowledge design lock while backgrounding Reports may require a later ADR if
   the pivot succeeds.
-
