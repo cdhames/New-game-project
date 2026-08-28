@@ -5,6 +5,7 @@ import {
   createInitialState,
   createPlayerProjection,
   nextRandom,
+  replayEvents,
   serializeCanonicalState,
   type CanonicalState,
 } from "@long-map/game-core";
@@ -97,6 +98,98 @@ export interface CommandReplayRejection {
   step: number;
 }
 export type CommandReplayResult = CommandReplaySuccess | CommandReplayRejection;
+
+export type BellAdventurePath =
+  | "careful-shared-discovery"
+  | "careful-private-discovery"
+  | "early-withdrawal"
+  | "risky-failed-descent";
+export interface BellAdventureRun {
+  path: BellAdventurePath;
+  seed: number;
+  commands: PlayerCommand[];
+  events: DomainEvent[];
+  state: CanonicalState;
+  projection: PlayerSafeProjection;
+  canonicalOutput: string;
+  projectionOutput: string;
+  commandReplayMatches: boolean;
+  eventReplayMatches: boolean;
+}
+
+export function runBellAdventurePath(path: BellAdventurePath, seed?: number): BellAdventureRun {
+  const effectiveSeed = seed ?? (path === "risky-failed-descent" ? 34 : 20_260_804);
+  const initial = createInitialState(effectiveSeed);
+  let state = initial;
+  const commands: PlayerCommand[] = [];
+  const events: DomainEvent[] = [];
+  let sequence = 0;
+  const dispatch = (kind: PlayerCommand["kind"], extra: Record<string, unknown> = {}): void => {
+    sequence += 1;
+    const nextCommand = PlayerCommandSchema.parse({
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: `bell-${path}-${sequence}`,
+      kind,
+      ...extra,
+    });
+    const result = applyCommand(state, nextCommand);
+    if (!result.ok) throw new Error(`Bell path ${path} rejected ${kind}: ${result.reason}`);
+    commands.push(nextCommand);
+    events.push(...result.events);
+    state = result.state;
+  };
+  dispatch("start-lead-expedition", {
+    leadId: "lead-bell-beneath-north-mark",
+    instruments: ["sounding-line", "weather-glass"],
+    preparation: {
+      extraProvisions: 0,
+      reinforcedVesselIntegrity: false,
+      extraChargeInstruments: [],
+    },
+  });
+  if (path === "risky-failed-descent") {
+    for (const routeId of ["r-hs", "r-sr", "r-sr", "r-sn"]) dispatch("travel", { routeId });
+    dispatch("perform-encounter-action", { actionId: "listen-surface" });
+    dispatch("perform-encounter-action", { actionId: "descend-into-resonance" });
+  } else {
+    dispatch("travel", { routeId: "r-hs" });
+    dispatch("travel", { routeId: "r-sn" });
+    if (path === "early-withdrawal") {
+      dispatch("perform-encounter-action", { actionId: "listen-surface" });
+      dispatch("perform-encounter-action", { actionId: "withdraw-from-bell" });
+    } else {
+      dispatch("perform-encounter-action", { actionId: "triangulate-sounding-line" });
+      dispatch("perform-encounter-action", { actionId: "separate-current-weather-glass" });
+      dispatch("perform-encounter-action", { actionId: "descend-into-resonance" });
+    }
+    dispatch("travel", { routeId: "r-sn" });
+    dispatch("travel", { routeId: "r-hs" });
+    dispatch("resolve-return");
+    if (path === "careful-shared-discovery")
+      dispatch("resolve-discovery-disclosure", { choice: "share" });
+    if (path === "careful-private-discovery")
+      dispatch("resolve-discovery-disclosure", { choice: "withhold" });
+    dispatch("acknowledge-visible-drift");
+  }
+  const canonicalOutput = serializeCanonicalState(state);
+  const projection = createPlayerProjection(state);
+  const projectionOutput = JSON.stringify(projection);
+  const commandReplay = replayCommands(effectiveSeed, commands);
+  const eventReplay = replayEvents(createInitialState(effectiveSeed), events);
+  return {
+    path,
+    seed: effectiveSeed,
+    commands,
+    events,
+    state,
+    projection,
+    canonicalOutput,
+    projectionOutput,
+    commandReplayMatches:
+      commandReplay.ok && serializeCanonicalState(commandReplay.state) === canonicalOutput,
+    eventReplayMatches: serializeCanonicalState(eventReplay) === canonicalOutput,
+  };
+}
 
 type SimulationInvariantContext =
   | {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 4 as const;
+export const PROTOCOL_VERSION = 5 as const;
 const stableId = z.string().regex(/^[a-z][a-z0-9-]{0,63}$/);
 export const StableIdSchema = stableId;
 export type StableId = z.infer<typeof StableIdSchema>;
@@ -26,6 +26,181 @@ export const PreparationPlanSchema = z.object({
   extraChargeInstruments: z.array(InstrumentSchema).max(2),
 });
 export type PreparationPlan = z.infer<typeof PreparationPlanSchema>;
+
+export const AdventureLeadIdSchema = z.enum([
+  "lead-bell-beneath-north-mark",
+  "lead-follow-divided-resonance",
+  "lead-return-before-rival-charts-bell",
+]);
+export type AdventureLeadId = z.infer<typeof AdventureLeadIdSchema>;
+export const BellEncounterActionIdSchema = z.enum([
+  "listen-surface",
+  "triangulate-sounding-line",
+  "separate-current-weather-glass",
+  "inspect-debris-field-lens",
+  "descend-into-resonance",
+  "withdraw-from-bell",
+  "tune-resonance-compass",
+]);
+export type BellEncounterActionId = z.infer<typeof BellEncounterActionIdSchema>;
+export const AdventureClueIdSchema = z.enum([
+  "clue-bell-interval",
+  "clue-fractured-shelf",
+  "clue-current-independent",
+  "clue-worked-stone",
+  "clue-submerged-waystone",
+]);
+export type AdventureClueId = z.infer<typeof AdventureClueIdSchema>;
+export const AdventureDiscoveryIdSchema = z.literal("discovery-resonant-waystone-fragment");
+export type AdventureDiscoveryId = z.infer<typeof AdventureDiscoveryIdSchema>;
+export const AdventureCapabilityIdSchema = z.literal("capability-resonance-compass");
+export type AdventureCapabilityId = z.infer<typeof AdventureCapabilityIdSchema>;
+export const RevealChoiceSchema = z.enum(["share", "withhold"]);
+export type RevealChoice = z.infer<typeof RevealChoiceSchema>;
+export const EncounterPhaseSchema = z.enum([
+  "inactive",
+  "active",
+  "resolved",
+  "withdrawn",
+  "failed",
+]);
+export type EncounterPhase = z.infer<typeof EncounterPhaseSchema>;
+export const AdventureLeadSchema = z.object({
+  id: AdventureLeadIdSchema,
+  title: z.string().min(1),
+  targetLocationId: z.literal("north-mark"),
+  premise: z.string().min(1),
+  stakes: z.string().min(1),
+  recommendedInstruments: z.array(InstrumentSchema),
+  rewardSummary: z.string().min(1),
+});
+export type AdventureLead = z.infer<typeof AdventureLeadSchema>;
+export const ActiveLeadStateSchema = z.object({
+  leadId: AdventureLeadIdSchema,
+  status: z.enum([
+    "active",
+    "encounter",
+    "returning",
+    "disclosure-pending",
+    "completed",
+    "incomplete",
+    "failed",
+  ]),
+  targetReached: z.boolean(),
+});
+export type ActiveLeadState = z.infer<typeof ActiveLeadStateSchema>;
+export const AdventureClueSchema = z.object({
+  id: AdventureClueIdSchema,
+  title: z.string().min(1),
+  safeSummary: z.string().min(1),
+  private: z.boolean(),
+});
+export type AdventureClue = z.infer<typeof AdventureClueSchema>;
+export const AdventureDiscoverySchema = z.object({
+  id: AdventureDiscoveryIdSchema,
+  title: z.literal("Resonant Waystone Fragment"),
+  interpretation: z.string().min(1),
+  public: z.boolean(),
+});
+export type AdventureDiscovery = z.infer<typeof AdventureDiscoverySchema>;
+export const AdventureCapabilitySchema = z.object({
+  id: AdventureCapabilityIdSchema,
+  title: z.literal("Resonance Compass"),
+  safeDescription: z.string().min(1),
+});
+export type AdventureCapability = z.infer<typeof AdventureCapabilitySchema>;
+export const SimulatedOutsideClaimSchema = z.object({
+  id: stableId,
+  actorId: z.literal("actor-mara-venn-simulated"),
+  actorDisplayName: z.literal("Mara Venn — simulated expedition source"),
+  sourceType: z.literal("simulated-prototype"),
+  subjectId: z.enum(["r-nd", "r-nr"]),
+  category: z.literal("resonance-direction"),
+  reportedValue: z.enum(["north-mark-deep-spur", "north-mark-reed-bank"]),
+  quality: EvidenceQualitySchema,
+  observedRevision: WorldRevisionSchema,
+  publishedAt: LogicalTimeSchema,
+  age: z.number().int().nonnegative(),
+  potentiallyStale: z.boolean(),
+  relationToPlayerClaim: z.enum(["partial-corroboration", "conflict", "independent"]),
+});
+export type SimulatedOutsideClaim = z.infer<typeof SimulatedOutsideClaimSchema>;
+export const VisibleDriftEventSchema = z.object({
+  id: z.literal("drift-event-north-mark-resonance"),
+  affectedRegionId: z.literal("north-mark"),
+  revision: WorldRevisionSchema,
+  summary: z.literal("Currents and the submerged shelf shifted near North Mark."),
+  explanation: z.literal("The world changed, so some old knowledge may no longer be reliable."),
+  potentiallyStaleClaimIds: z.array(stableId),
+  pendingAcknowledgement: z.boolean(),
+});
+export type VisibleDriftEvent = z.infer<typeof VisibleDriftEventSchema>;
+export const AdventureResolutionSchema = z.object({
+  leadId: AdventureLeadIdSchema,
+  outcome: z.enum(["shared", "withheld", "incomplete", "failed"]),
+  clueIds: z.array(AdventureClueIdSchema),
+  discoveryRecovered: z.boolean(),
+  capabilityUnlocked: z.boolean(),
+  disclosureChoice: RevealChoiceSchema.nullable(),
+});
+export type AdventureResolution = z.infer<typeof AdventureResolutionSchema>;
+export const SafeEncounterActionSchema = z.object({
+  id: BellEncounterActionIdSchema,
+  title: z.string().min(1),
+  description: z.string().min(1),
+  available: z.boolean(),
+  unavailableReason: z.enum([
+    "available",
+    "encounter-inactive",
+    "already-completed",
+    "instrument-not-selected",
+    "instrument-depleted",
+    "insufficient-provisions",
+    "clue-required",
+    "capability-required",
+  ]),
+  provisionCost: z.number().int().nonnegative(),
+  instrumentChargeCost: z.number().int().nonnegative(),
+  requiredInstrument: InstrumentSchema.nullable(),
+  minimumKnownDamage: z.number().int().nonnegative().nullable(),
+  alreadyCompleted: z.boolean(),
+  possibleOutcome: z.string().min(1),
+});
+export type SafeEncounterAction = z.infer<typeof SafeEncounterActionSchema>;
+export const SafeAdventureProjectionSchema = z.object({
+  primaryLead: AdventureLeadSchema,
+  availableLead: AdventureLeadSchema.nullable(),
+  activeLead: ActiveLeadStateSchema.nullable(),
+  aftermathOfRecentDrift: z.boolean(),
+  encounter: z
+    .object({
+      id: z.literal("encounter-bell-north-mark"),
+      phase: EncounterPhaseSchema,
+      instruction: z.string().min(1),
+      actions: z.array(SafeEncounterActionSchema),
+    })
+    .nullable(),
+  clues: z.array(AdventureClueSchema),
+  discoveries: z.array(AdventureDiscoverySchema),
+  capabilities: z.array(AdventureCapabilitySchema),
+  disclosurePending: z.boolean(),
+  outsideClaims: z.array(SimulatedOutsideClaimSchema),
+  publicResonanceEvidenceState: z.enum(["unknown", "single-value", "conflicting-values"]),
+  publicAnnotations: z.array(
+    z.object({
+      id: stableId,
+      subjectId: stableId,
+      summary: z.string().min(1),
+      traversable: z.literal(false),
+    }),
+  ),
+  privateAcousticRouteClue: z
+    .object({ routeId: z.literal("r-nd"), summary: z.string().min(1) })
+    .nullable(),
+  visibleDriftEvent: VisibleDriftEventSchema.nullable(),
+  latestResolution: AdventureResolutionSchema.nullable(),
+});
+export type SafeAdventureProjection = z.infer<typeof SafeAdventureProjectionSchema>;
 
 const commissionBase = z.object({
   id: stableId,
@@ -82,6 +257,21 @@ export const PlayerCommandSchema = z.discriminatedUnion("kind", [
     commissionId: stableId,
     preparation: PreparationPlanSchema,
   }),
+  commandBase.extend({
+    kind: z.literal("start-lead-expedition"),
+    leadId: AdventureLeadIdSchema,
+    instruments: z.array(InstrumentSchema).length(2),
+    preparation: PreparationPlanSchema,
+  }),
+  commandBase.extend({
+    kind: z.literal("perform-encounter-action"),
+    actionId: BellEncounterActionIdSchema,
+  }),
+  commandBase.extend({
+    kind: z.literal("resolve-discovery-disclosure"),
+    choice: RevealChoiceSchema,
+  }),
+  commandBase.extend({ kind: z.literal("acknowledge-visible-drift") }),
   commandBase.extend({ kind: z.literal("travel"), routeId: stableId }),
   commandBase.extend({
     kind: z.literal("observe"),
@@ -124,6 +314,12 @@ export const RejectionReasonSchema = z.enum([
   "duplicate-command",
   "drift-not-due",
   "failure-not-eligible",
+  "lead-unavailable",
+  "encounter-action-unavailable",
+  "disclosure-not-pending",
+  "disclosure-required",
+  "visible-drift-pending",
+  "visible-drift-not-pending",
 ]);
 export type RejectionReason = z.infer<typeof RejectionReasonSchema>;
 
@@ -364,6 +560,7 @@ export interface PlayerSafeProjection {
   observations: ObservationRecord[];
   atlas: AtlasClaim[];
   traces: TraceRecord[];
+  adventure: SafeAdventureProjection;
 }
 
 export interface DomainEvent {

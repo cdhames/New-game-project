@@ -1,6 +1,14 @@
 import {
   PROTOCOL_VERSION,
   type ActionAffordances,
+  type ActiveLeadState,
+  type AdventureCapability,
+  type AdventureClue,
+  type AdventureClueId,
+  type AdventureDiscovery,
+  type AdventureLead,
+  type AdventureLeadId,
+  type AdventureResolution,
   type AtlasClaim,
   type CommissionOffer,
   type CommissionProgress,
@@ -24,8 +32,12 @@ import {
   type RouteEvidenceClaim,
   type ReturnReserveWarning,
   type SafeRouteDescriptor,
+  type SafeAdventureProjection,
+  type SafeEncounterAction,
+  type SimulatedOutsideClaim,
   type StableId,
   type TraceRecord,
+  type VisibleDriftEvent,
 } from "@long-map/protocol";
 
 export const ROUTE_VALUE_MIN = 0;
@@ -62,12 +74,51 @@ export interface WorldTruth {
   subjectLastChangedRevision: Record<StableId, number>;
 }
 export interface Scenario {
-  version: "1.3.0";
+  version: "1.4.0";
   initialLogicalTime: number;
   waystationId: StableId;
   nodes: NodeTruth[];
   routes: RouteTruth[];
   baselineReports: ReportRecord[];
+}
+export interface BellEncounterState {
+  id: "encounter-bell-north-mark";
+  phase: "active" | "resolved" | "withdrawn" | "failed";
+  completedActionIds: Array<
+    | "listen-surface"
+    | "triangulate-sounding-line"
+    | "separate-current-weather-glass"
+    | "inspect-debris-field-lens"
+    | "descend-into-resonance"
+    | "withdraw-from-bell"
+    | "tune-resonance-compass"
+  >;
+  clueIds: AdventureClueId[];
+  discoveryRecovered: boolean;
+  descended: boolean;
+  withdrew: boolean;
+}
+export interface AdventureCanonicalState {
+  primaryLeadId: "lead-bell-beneath-north-mark";
+  availableLeadId: AdventureLeadId | null;
+  activeLead: ActiveLeadState | null;
+  encounter: BellEncounterState | null;
+  clueIds: AdventureClueId[];
+  discoveryRecovered: boolean;
+  discoveryPublic: boolean;
+  capabilityIds: Array<"capability-resonance-compass">;
+  disclosurePending: boolean;
+  outsideClaims: SimulatedOutsideClaim[];
+  publicAnnotations: Array<{
+    id: StableId;
+    subjectId: StableId;
+    summary: string;
+    traversable: false;
+  }>;
+  privateAcousticRouteClue: boolean;
+  visibleDriftEvent: VisibleDriftEvent | null;
+  latestResolution: AdventureResolution | null;
+  firstBellAdventureResolved: boolean;
 }
 export interface RngState {
   value: number;
@@ -99,7 +150,7 @@ export interface ExpeditionState {
 }
 export interface CanonicalState {
   protocolVersion: typeof PROTOCOL_VERSION;
-  scenarioVersion: "1.3.0";
+  scenarioVersion: "1.4.0";
   revision: number;
   logicalTime: number;
   rng: RngState;
@@ -115,6 +166,7 @@ export interface CanonicalState {
   bankedFindings: number;
   atlasContribution: number;
   latestExpeditionSummary: ExpeditionOutcomeSummary | null;
+  adventure: AdventureCanonicalState;
   processedCommandIds: StableId[];
 }
 export interface ApplySuccess {
@@ -233,7 +285,7 @@ const baseline = (
   };
 };
 export const DEVELOPMENT_SCENARIO: Scenario = {
-  version: "1.3.0",
+  version: "1.4.0",
   initialLogicalTime: INITIAL_LOGICAL_TIME,
   waystationId: "harbor",
   nodes,
@@ -247,6 +299,81 @@ export const DEVELOPMENT_SCENARIO: Scenario = {
     baseline(6, "glass-cay", "condition", "high", 0),
   ],
 };
+
+const ADVENTURE_LEADS: Record<AdventureLeadId, AdventureLead> = {
+  "lead-bell-beneath-north-mark": {
+    id: "lead-bell-beneath-north-mark",
+    title: "The Bell Beneath North Mark",
+    targetLocationId: "north-mark",
+    premise:
+      "A repeating bell-like tone began beneath North Mark after a recent Drift, and existing claims disagree about its origin.",
+    stakes:
+      "Another explorer may act first; instruments can change the approaches available at the source.",
+    recommendedInstruments: ["sounding-line", "weather-glass", "field-lens"],
+    rewardSummary: "A discovery and a new capability, not merely Findings.",
+  },
+  "lead-follow-divided-resonance": {
+    id: "lead-follow-divided-resonance",
+    title: "Follow the Divided Resonance",
+    targetLocationId: "north-mark",
+    premise:
+      "Public claims now disagree about which direction continues the Resonant Waystone signal.",
+    stakes:
+      "The shared Atlas is disputed, and the Resonance Compass can test the acoustic signature.",
+    recommendedInstruments: ["sounding-line", "weather-glass"],
+    rewardSummary: "Use the Resonance Compass to open a new encounter approach.",
+  },
+  "lead-return-before-rival-charts-bell": {
+    id: "lead-return-before-rival-charts-bell",
+    title: "Return Before the Rival Charts the Bell",
+    targetLocationId: "north-mark",
+    premise:
+      "Mara Venn has publicly marked a contested resonance while your precise discovery remains private.",
+    stakes:
+      "Your Resonance Compass offers a temporary private advantage before the rival claim spreads.",
+    recommendedInstruments: ["sounding-line", "weather-glass"],
+    rewardSummary: "Use private knowledge to interpret the next resonance encounter.",
+  },
+};
+
+const ADVENTURE_CLUES: Record<AdventureClueId, Omit<AdventureClue, "private">> = {
+  "clue-bell-interval": {
+    id: "clue-bell-interval",
+    title: "Structured Bell Interval",
+    safeSummary:
+      "The tone repeats in a deliberate, structured interval, but its source remains unknown.",
+  },
+  "clue-fractured-shelf": {
+    id: "clue-fractured-shelf",
+    title: "Fractured Shelf Origin",
+    safeSummary: "The strongest source lies beneath a fractured shelf at North Mark.",
+  },
+  "clue-current-independent": {
+    id: "clue-current-independent",
+    title: "Current-Independent Tone",
+    safeSummary: "Present currents and weather do not fully explain the repeating tone.",
+  },
+  "clue-worked-stone": {
+    id: "clue-worked-stone",
+    title: "Worked Shelf Debris",
+    safeSummary: "Visible fragments bear worked rather than natural surfaces.",
+  },
+  "clue-submerged-waystone": {
+    id: "clue-submerged-waystone",
+    title: "Submerged Waystone",
+    safeSummary: "A worked submerged structure resonates with the shifting currents.",
+  },
+};
+
+const RESONANCE_COMPASS: AdventureCapability = {
+  id: "capability-resonance-compass",
+  title: "Resonance Compass",
+  safeDescription:
+    "Identifies a safe acoustic-signature clue without revealing route hazard, condition, or safety.",
+};
+
+const adventureEncounterBlocking = (state: CanonicalState): boolean =>
+  state.adventure.encounter?.phase === "active";
 
 export function nextRandom(rng: RngState): { rng: RngState; value: number } {
   let x = rng.value | 0;
@@ -278,6 +405,23 @@ export function createInitialState(seed: number, scenario = DEVELOPMENT_SCENARIO
     bankedFindings: 0,
     atlasContribution: 0,
     latestExpeditionSummary: null,
+    adventure: {
+      primaryLeadId: "lead-bell-beneath-north-mark",
+      availableLeadId: "lead-bell-beneath-north-mark",
+      activeLead: null,
+      encounter: null,
+      clueIds: [],
+      discoveryRecovered: false,
+      discoveryPublic: false,
+      capabilityIds: [],
+      disclosurePending: false,
+      outsideClaims: [],
+      publicAnnotations: [],
+      privateAcousticRouteClue: false,
+      visibleDriftEvent: null,
+      latestResolution: null,
+      firstBellAdventureResolved: false,
+    },
     processedCommandIds: [],
   };
 }
@@ -512,7 +656,11 @@ function observationApplicability(
 }
 
 function canStartExpedition(state: CanonicalState): boolean {
-  return (state.phase === "idle" || state.phase === "failed") && !state.driftDue;
+  return (
+    (state.phase === "idle" || state.phase === "failed") &&
+    !state.driftDue &&
+    !state.adventure.visibleDriftEvent?.pendingAcknowledgement
+  );
 }
 
 function canResolveReturn(state: CanonicalState, scenario: Scenario): boolean {
@@ -678,6 +826,7 @@ function actionAffordances(
   scenario = DEVELOPMENT_SCENARIO,
 ): ActionAffordances {
   const expedition = state.expedition;
+  const encounterBlocking = adventureEncounterBlocking(state);
   const underway =
     state.phase === "expedition" && expedition !== null && expedition.travelCount > 0;
   const localObservationCandidates =
@@ -710,7 +859,7 @@ function actionAffordances(
         ]
       : [];
   const travelOptions =
-    state.phase === "expedition" && expedition && expedition.provisions > 0
+    state.phase === "expedition" && expedition && expedition.provisions > 0 && !encounterBlocking
       ? state.world.routes
           .filter(
             (route) =>
@@ -749,7 +898,7 @@ function actionAffordances(
           .sort((a, b) => compareCodeUnits(a.routeId, b.routeId))
       : [];
   const observations =
-    underway && expedition
+    underway && expedition && !encounterBlocking
       ? localObservationCandidates
           .filter((candidate) => {
             const instrument = methodFor[candidate.category];
@@ -766,7 +915,8 @@ function actionAffordances(
     state.phase === "expedition" &&
     expedition &&
     expedition.travelCount > 0 &&
-    expedition.provisions > 0
+    expedition.provisions > 0 &&
+    !encounterBlocking
       ? state.world.nodes
           .filter(
             (node) =>
@@ -843,6 +993,291 @@ function actionAffordances(
   };
 }
 
+function encounterActionAffordances(state: CanonicalState): SafeEncounterAction[] {
+  const encounter = state.adventure.encounter;
+  const expedition = state.expedition;
+  const active = state.phase === "expedition" && encounter?.phase === "active" && !!expedition;
+  const completed = new Set(encounter?.completedActionIds ?? []);
+  const make = (
+    id: SafeEncounterAction["id"],
+    title: string,
+    description: string,
+    provisionCost: number,
+    requiredInstrument: Instrument | null,
+    instrumentChargeCost: number,
+    possibleOutcome: string,
+    extraAvailable = true,
+    extraReason: SafeEncounterAction["unavailableReason"] = "available",
+    minimumKnownDamage: number | null = null,
+  ): SafeEncounterAction => {
+    const alreadyCompleted = completed.has(id);
+    let unavailableReason: SafeEncounterAction["unavailableReason"] = "available";
+    if (!active) unavailableReason = "encounter-inactive";
+    else if (alreadyCompleted) unavailableReason = "already-completed";
+    else if (requiredInstrument && !expedition!.instruments.includes(requiredInstrument))
+      unavailableReason = "instrument-not-selected";
+    else if (
+      requiredInstrument &&
+      (expedition!.instrumentCharges[requiredInstrument]?.current ?? 0) < instrumentChargeCost
+    )
+      unavailableReason = "instrument-depleted";
+    else if (expedition!.provisions < provisionCost) unavailableReason = "insufficient-provisions";
+    else if (!extraAvailable) unavailableReason = extraReason;
+    return {
+      id,
+      title,
+      description,
+      available: unavailableReason === "available",
+      unavailableReason,
+      provisionCost,
+      instrumentChargeCost,
+      requiredInstrument,
+      minimumKnownDamage,
+      alreadyCompleted,
+      possibleOutcome,
+    };
+  };
+  const mitigated =
+    completed.has("triangulate-sounding-line") || completed.has("separate-current-weather-glass");
+  const actions: SafeEncounterAction[] = [
+    make(
+      "listen-surface",
+      "Listen from the surface",
+      "Listen for structure in the repeating tone without risking the vessel.",
+      0,
+      null,
+      0,
+      "May establish the tone's interval without revealing its source.",
+    ),
+    make(
+      "triangulate-sounding-line",
+      "Triangulate with the Sounding Line",
+      "Spend one Charge and one Provision to locate the source beneath the shelf.",
+      1,
+      "sounding-line",
+      1,
+      "May locate the source and reduce known descent damage.",
+    ),
+    make(
+      "separate-current-weather-glass",
+      "Separate the current with the Weather Glass",
+      "Spend one Charge to test whether present currents explain the tone.",
+      0,
+      "weather-glass",
+      1,
+      "May rule out a current-only explanation and reduce known descent damage.",
+    ),
+    make(
+      "inspect-debris-field-lens",
+      "Inspect shelf debris with the Field Lens",
+      "Spend one Charge to inspect whether visible fragments are natural or worked.",
+      0,
+      "field-lens",
+      1,
+      "May improve a later interpretation without reducing descent risk.",
+    ),
+    make(
+      "descend-into-resonance",
+      "Descend into the resonance",
+      "Spend one Provision and accept the displayed deterministic Vessel Integrity damage.",
+      1,
+      null,
+      0,
+      "May recover a significant discovery; zero Vessel Integrity causes failure.",
+      (encounter?.clueIds.length ?? 0) > 0,
+      "clue-required",
+      mitigated ? 1 : 2,
+    ),
+    make(
+      "withdraw-from-bell",
+      "Withdraw with current evidence",
+      "End the encounter without further damage and preserve acquired clues.",
+      0,
+      null,
+      0,
+      "Resolves the Lead as incomplete and permits return travel.",
+    ),
+  ];
+  if (state.adventure.capabilityIds.includes("capability-resonance-compass"))
+    actions.push(
+      make(
+        "tune-resonance-compass",
+        "Tune the Resonance Compass",
+        "Compare the recovered acoustic signature with the contested route claims.",
+        0,
+        null,
+        0,
+        "Can distinguish an acoustic signature without revealing route danger.",
+      ),
+    );
+  return actions;
+}
+
+function validatePreparation(
+  state: CanonicalState,
+  instruments: Instrument[],
+  preparation: PreparationPlan,
+): RejectionReason | null {
+  if (new Set(instruments).size !== 2) return "invalid-loadout";
+  const extraCharges = preparation.extraChargeInstruments;
+  if (
+    preparation.extraProvisions < 0 ||
+    preparation.extraProvisions > 2 ||
+    new Set(extraCharges).size !== extraCharges.length ||
+    extraCharges.some((instrument) => !instruments.includes(instrument))
+  )
+    return "invalid-preparation";
+  return state.bankedFindings < preparationCost(preparation) ? "insufficient-findings" : null;
+}
+
+function beginExpedition(
+  next: CanonicalState,
+  instruments: Instrument[],
+  preparation: PreparationPlan,
+  commission: CommissionOffer,
+  scenario: Scenario,
+): void {
+  const cost = preparationCost(preparation);
+  const extraCharges = preparation.extraChargeInstruments;
+  next.expeditionSequence += 1;
+  next.bankedFindings -= cost;
+  next.phase = "expedition";
+  const startingProvisions = BASE_PROVISIONS + preparation.extraProvisions;
+  const startingVesselIntegrity =
+    BASE_VESSEL_INTEGRITY + Number(preparation.reinforcedVesselIntegrity);
+  next.expedition = {
+    id: `expedition-${next.expeditionSequence}`,
+    instruments: [...instruments].sort(compareCodeUnits),
+    provisions: startingProvisions,
+    maximumProvisions: startingProvisions,
+    vesselIntegrity: startingVesselIntegrity,
+    maximumVesselIntegrity: startingVesselIntegrity,
+    instrumentCharges: Object.fromEntries(
+      instruments.map((instrument) => {
+        const maximum = BASE_INSTRUMENT_CHARGES + Number(extraCharges.includes(instrument));
+        return [instrument, { current: maximum, maximum }];
+      }),
+    ),
+    locationId: scenario.waystationId,
+    previousLocationId: null,
+    visited: [scenario.waystationId],
+    observations: [],
+    travelCount: 0,
+    unbankedFindings: 0,
+    salvagedOpportunityIds: [],
+    commission: structuredClone(commission),
+    commissionProgress: {
+      status: "active",
+      targetVisited: false,
+      matchingObservationRecorded: false,
+      targetSalvageRecovered: false,
+      requiredReportPublished: false,
+      findingsRewardGranted: false,
+    },
+    preparation: structuredClone(preparation),
+    preparationFindingsSpent: cost,
+    startingResources: {
+      provisions: startingProvisions,
+      maximumProvisions: startingProvisions,
+      vesselIntegrity: startingVesselIntegrity,
+      maximumVesselIntegrity: startingVesselIntegrity,
+      bankedFindings: next.bankedFindings,
+      unbankedFindings: 0,
+    },
+    routeLegs: [],
+    totalDamageSustained: 0,
+    salvageOutcomes: [],
+    findingsRecoveredFromSalvage: 0,
+  };
+}
+
+function scheduleBellResolution(
+  state: CanonicalState,
+  outcome: "shared" | "withheld" | "incomplete",
+): void {
+  const leadId = state.adventure.activeLead?.leadId ?? "lead-bell-beneath-north-mark";
+  const choice = outcome === "shared" ? "share" : outcome === "withheld" ? "withhold" : null;
+  const maraClaim: SimulatedOutsideClaim = {
+    id: `mara-claim-${outcome}`,
+    actorId: "actor-mara-venn-simulated",
+    actorDisplayName: "Mara Venn — simulated expedition source",
+    sourceType: "simulated-prototype",
+    subjectId: "r-nr",
+    category: "resonance-direction",
+    reportedValue: "north-mark-reed-bank",
+    quality: outcome === "shared" ? "medium" : "low",
+    observedRevision: state.revision,
+    publishedAt: state.logicalTime,
+    age: 0,
+    potentiallyStale: false,
+    relationToPlayerClaim: outcome === "shared" ? "partial-corroboration" : "independent",
+  };
+  state.adventure.outsideClaims = [maraClaim];
+  state.adventure.publicAnnotations =
+    outcome === "shared"
+      ? [
+          {
+            id: "annotation-resonant-waystone-north-mark",
+            subjectId: "north-mark",
+            summary: "North Mark is publicly marked as a Resonant Waystone site.",
+            traversable: false,
+          },
+          {
+            id: "annotation-resonance-r-nd",
+            subjectId: "r-nd",
+            summary: "The recovered fragment points toward the North Mark–Deep Spur direction.",
+            traversable: false,
+          },
+        ]
+      : [
+          {
+            id: "annotation-unresolved-north-mark",
+            subjectId: "north-mark",
+            summary: "A public unresolved resonance anomaly remains beneath North Mark.",
+            traversable: false,
+          },
+        ];
+  state.adventure.discoveryPublic = outcome === "shared";
+  state.adventure.privateAcousticRouteClue = outcome === "withheld";
+  if (outcome === "shared") state.atlasContribution += 1;
+  state.adventure.availableLeadId =
+    outcome === "shared" ? "lead-follow-divided-resonance" : "lead-return-before-rival-charts-bell";
+  state.adventure.latestResolution = {
+    leadId,
+    outcome,
+    clueIds: [...state.adventure.clueIds],
+    discoveryRecovered: state.adventure.discoveryRecovered,
+    capabilityUnlocked: state.adventure.capabilityIds.includes("capability-resonance-compass"),
+    disclosureChoice: choice,
+  };
+  if (!state.adventure.firstBellAdventureResolved) {
+    const routeId = outcome === "shared" ? "r-nd" : "r-nr";
+    const route = state.world.routes.find((candidate) => candidate.id === routeId)!;
+    state.revision += 1;
+    route.condition = route.condition >= ROUTE_VALUE_MAX ? ROUTE_VALUE_MIN : route.condition + 1;
+    state.world.subjectLastChangedRevision[routeId] = state.revision;
+    const potentiallyStaleClaimIds = [
+      ...state.reports
+        .filter((report) => report.subjectId === routeId)
+        .map((report) => report.reportId),
+      ...state.adventure.publicAnnotations
+        .filter((annotation) => annotation.subjectId === routeId)
+        .map((annotation) => annotation.id),
+      ...(maraClaim.subjectId === routeId ? [maraClaim.id] : []),
+    ].sort(compareCodeUnits);
+    state.adventure.visibleDriftEvent = {
+      id: "drift-event-north-mark-resonance",
+      affectedRegionId: "north-mark",
+      revision: state.revision,
+      summary: "Currents and the submerged shelf shifted near North Mark.",
+      explanation: "The world changed, so some old knowledge may no longer be reliable.",
+      potentiallyStaleClaimIds,
+      pendingAcknowledgement: true,
+    };
+    state.adventure.firstBellAdventureResolved = true;
+  }
+}
+
 export function applyCommand(
   state: CanonicalState,
   command: PlayerCommand,
@@ -853,85 +1288,150 @@ export function applyCommand(
   const next = structuredClone(state);
   next.logicalTime += 1;
   next.processedCommandIds.push(command.commandId);
+  if (command.kind === "start-lead-expedition") {
+    if (state.phase !== "idle" && state.phase !== "failed") return reject(state, "wrong-phase");
+    if (state.driftDue) return reject(state, "drift-required");
+    if (state.adventure.visibleDriftEvent?.pendingAcknowledgement)
+      return reject(state, "visible-drift-pending");
+    if (state.adventure.availableLeadId !== command.leadId)
+      return reject(state, "lead-unavailable");
+    const preparationRejection = validatePreparation(
+      state,
+      command.instruments,
+      command.preparation,
+    );
+    if (preparationRejection) return reject(state, preparationRejection);
+    const bridgeCommission: CommissionOffer = {
+      id: command.leadId,
+      family: "reach-frontier",
+      findingsReward: 3,
+      publicationRequired: false,
+      targetLocationId: "north-mark",
+    };
+    beginExpedition(next, command.instruments, command.preparation, bridgeCommission, scenario);
+    next.adventure.activeLead = {
+      leadId: command.leadId,
+      status: "active",
+      targetReached: false,
+    };
+    next.adventure.encounter = null;
+    next.adventure.disclosurePending = false;
+    return {
+      ok: true,
+      state: next,
+      events: [
+        snapshotEvent(next, "lead-expedition-started", {
+          expeditionId: next.expedition!.id,
+          leadId: command.leadId,
+          instruments: next.expedition!.instruments,
+          preparationFindingsSpent: next.expedition!.preparationFindingsSpent,
+        }),
+      ],
+    };
+  }
   if (command.kind === "start-expedition") {
     if (state.phase !== "idle" && state.phase !== "failed") return reject(state, "wrong-phase");
     if (state.driftDue) return reject(state, "drift-required");
-    if (new Set(command.instruments).size !== 2) return reject(state, "invalid-loadout");
+    const preparationRejection = validatePreparation(
+      state,
+      command.instruments,
+      command.preparation,
+    );
+    if (preparationRejection) return reject(state, preparationRejection);
     const offer = generateCommissionOffers(state, scenario).find(
       (candidate) => candidate.id === command.commissionId,
     );
     if (!offer) return reject(state, "commission-unavailable");
     if ("requiredInstrument" in offer && !command.instruments.includes(offer.requiredInstrument))
       return reject(state, "commission-incompatible-loadout");
-    const extraCharges = command.preparation.extraChargeInstruments;
-    if (
-      command.preparation.extraProvisions < 0 ||
-      command.preparation.extraProvisions > 2 ||
-      new Set(extraCharges).size !== extraCharges.length ||
-      extraCharges.some((instrument) => !command.instruments.includes(instrument))
-    )
-      return reject(state, "invalid-preparation");
     const cost = preparationCost(command.preparation);
-    if (state.bankedFindings < cost) return reject(state, "insufficient-findings");
-    next.expeditionSequence += 1;
-    next.bankedFindings -= cost;
-    next.phase = "expedition";
-    const startingProvisions = BASE_PROVISIONS + command.preparation.extraProvisions;
-    const startingVesselIntegrity =
-      BASE_VESSEL_INTEGRITY + Number(command.preparation.reinforcedVesselIntegrity);
-    next.expedition = {
-      id: `expedition-${next.expeditionSequence}`,
-      instruments: [...command.instruments].sort(compareCodeUnits),
-      provisions: startingProvisions,
-      maximumProvisions: startingProvisions,
-      vesselIntegrity: startingVesselIntegrity,
-      maximumVesselIntegrity: startingVesselIntegrity,
-      instrumentCharges: Object.fromEntries(
-        command.instruments.map((instrument) => {
-          const maximum = BASE_INSTRUMENT_CHARGES + Number(extraCharges.includes(instrument));
-          return [instrument, { current: maximum, maximum }];
-        }),
-      ),
-      locationId: scenario.waystationId,
-      previousLocationId: null,
-      visited: [scenario.waystationId],
-      observations: [],
-      travelCount: 0,
-      unbankedFindings: 0,
-      salvagedOpportunityIds: [],
-      commission: structuredClone(offer),
-      commissionProgress: {
-        status: "active",
-        targetVisited: false,
-        matchingObservationRecorded: false,
-        targetSalvageRecovered: false,
-        requiredReportPublished: false,
-        findingsRewardGranted: false,
-      },
-      preparation: structuredClone(command.preparation),
-      preparationFindingsSpent: cost,
-      startingResources: {
-        provisions: startingProvisions,
-        maximumProvisions: startingProvisions,
-        vesselIntegrity: startingVesselIntegrity,
-        maximumVesselIntegrity: startingVesselIntegrity,
-        bankedFindings: next.bankedFindings,
-        unbankedFindings: 0,
-      },
-      routeLegs: [],
-      totalDamageSustained: 0,
-      salvageOutcomes: [],
-      findingsRecoveredFromSalvage: 0,
-    };
+    beginExpedition(next, command.instruments, command.preparation, offer, scenario);
     return {
       ok: true,
       state: next,
       events: [
         snapshotEvent(next, "expedition-started", {
-          expeditionId: next.expedition.id,
-          instruments: next.expedition.instruments,
+          expeditionId: next.expedition!.id,
+          instruments: next.expedition!.instruments,
           commissionId: offer.id,
           preparationFindingsSpent: cost,
+        }),
+      ],
+    };
+  }
+  if (command.kind === "perform-encounter-action") {
+    const projected = encounterActionAffordances(state).find(
+      (action) => action.id === command.actionId,
+    );
+    if (!projected?.available || !state.expedition || !state.adventure.encounter)
+      return reject(state, "encounter-action-unavailable");
+    const expedition = next.expedition!;
+    const encounter = next.adventure.encounter!;
+    encounter.completedActionIds.push(command.actionId);
+    const grantClue = (clueId: AdventureClueId): void => {
+      if (!encounter.clueIds.includes(clueId)) encounter.clueIds.push(clueId);
+      if (!next.adventure.clueIds.includes(clueId)) next.adventure.clueIds.push(clueId);
+    };
+    if (command.actionId === "listen-surface") grantClue("clue-bell-interval");
+    if (command.actionId === "triangulate-sounding-line") {
+      expedition.instrumentCharges["sounding-line"]!.current -= 1;
+      expedition.provisions -= 1;
+      grantClue("clue-fractured-shelf");
+    }
+    if (command.actionId === "separate-current-weather-glass") {
+      expedition.instrumentCharges["weather-glass"]!.current -= 1;
+      grantClue("clue-current-independent");
+    }
+    if (command.actionId === "inspect-debris-field-lens") {
+      expedition.instrumentCharges["field-lens"]!.current -= 1;
+      grantClue("clue-worked-stone");
+    }
+    if (command.actionId === "withdraw-from-bell") {
+      encounter.phase = "withdrawn";
+      encounter.withdrew = true;
+      next.adventure.activeLead!.status = "returning";
+    }
+    if (command.actionId === "descend-into-resonance") {
+      expedition.provisions -= 1;
+      encounter.descended = true;
+      const mitigated =
+        encounter.completedActionIds.includes("triangulate-sounding-line") ||
+        encounter.completedActionIds.includes("separate-current-weather-glass");
+      const damage = mitigated ? 1 : 2;
+      expedition.vesselIntegrity -= damage;
+      expedition.totalDamageSustained += damage;
+      if (expedition.vesselIntegrity <= 0) {
+        encounter.phase = "failed";
+        next.adventure.activeLead!.status = "failed";
+        fail(next, scenario, "vessel-integrity");
+        next.adventure.latestResolution = {
+          leadId: next.adventure.activeLead!.leadId,
+          outcome: "failed",
+          clueIds: [...encounter.clueIds],
+          discoveryRecovered: false,
+          capabilityUnlocked: false,
+          disclosureChoice: null,
+        };
+      } else {
+        grantClue("clue-submerged-waystone");
+        encounter.discoveryRecovered = true;
+        encounter.phase = "resolved";
+        next.adventure.discoveryRecovered = true;
+        if (!next.adventure.capabilityIds.includes("capability-resonance-compass"))
+          next.adventure.capabilityIds.push("capability-resonance-compass");
+        next.adventure.activeLead!.status = "returning";
+      }
+    }
+    return {
+      ok: true,
+      state: next,
+      events: [
+        snapshotEvent(next, "bell-encounter-action-resolved", {
+          actionId: command.actionId,
+          clueIds: [...encounter.clueIds],
+          provisions: expedition.provisions,
+          vesselIntegrity: expedition.vesselIntegrity,
+          encounterPhase: encounter.phase,
         }),
       ],
     };
@@ -960,6 +1460,19 @@ export function applyCommand(
     mutable.previousLocationId = mutable.locationId;
     mutable.locationId = target;
     mutable.visited.push(target);
+    if (next.adventure.activeLead && target === "north-mark" && !next.adventure.encounter) {
+      next.adventure.activeLead.targetReached = true;
+      next.adventure.activeLead.status = "encounter";
+      next.adventure.encounter = {
+        id: "encounter-bell-north-mark",
+        phase: "active",
+        completedActionIds: [],
+        clueIds: [],
+        discoveryRecovered: false,
+        descended: false,
+        withdrew: false,
+      };
+    }
     if (
       mutable.commission.family === "reach-frontier" &&
       mutable.commission.targetLocationId === target
@@ -1111,6 +1624,43 @@ export function applyCommand(
     if (state.phase !== "expedition" || !expedition) return reject(state, "wrong-phase");
     if (expedition.locationId !== scenario.waystationId) return reject(state, "not-at-waystation");
     if (!canResolveReturn(state, scenario)) return reject(state, "expedition-not-underway");
+    if (state.adventure.activeLead) {
+      const bankedFindings = expedition.unbankedFindings;
+      next.bankedFindings += bankedFindings;
+      next.expedition!.unbankedFindings = 0;
+      next.personalObservations.push(...expedition.observations);
+      next.resolvedExpeditions += 1;
+      next.latestExpeditionSummary = outcomeSummary(
+        next,
+        next.expedition!,
+        "returned",
+        null,
+        next.adventure.discoveryRecovered ? "pending" : "not-applicable",
+      );
+      if (next.adventure.discoveryRecovered) {
+        next.phase = "returned";
+        next.adventure.activeLead!.status = "disclosure-pending";
+        next.adventure.disclosurePending = true;
+      } else {
+        next.adventure.activeLead!.status = "incomplete";
+        scheduleBellResolution(next, "incomplete");
+        next.phase = "idle";
+        next.expedition = null;
+        next.adventure.activeLead = null;
+      }
+      return {
+        ok: true,
+        state: next,
+        events: [
+          snapshotEvent(next, "lead-expedition-returned", {
+            leadId: state.adventure.activeLead.leadId,
+            discoveryRecovered: next.adventure.discoveryRecovered,
+            disclosurePending: next.adventure.disclosurePending,
+            bankedFindings,
+          }),
+        ],
+      };
+    }
     next.phase = "returned";
     const bankedFindings = expedition.unbankedFindings;
     next.bankedFindings += bankedFindings;
@@ -1164,7 +1714,59 @@ export function applyCommand(
       ],
     };
   }
+  if (command.kind === "resolve-discovery-disclosure") {
+    if (
+      state.phase !== "returned" ||
+      !state.expedition ||
+      !state.adventure.activeLead ||
+      !state.adventure.disclosurePending ||
+      !state.adventure.discoveryRecovered
+    )
+      return reject(state, "disclosure-not-pending");
+    scheduleBellResolution(next, command.choice === "share" ? "shared" : "withheld");
+    next.adventure.disclosurePending = false;
+    next.latestExpeditionSummary = outcomeSummary(
+      next,
+      next.expedition!,
+      "returned",
+      null,
+      "completed",
+      [],
+      command.choice === "share" ? 1 : 0,
+    );
+    next.expedition = null;
+    next.phase = "idle";
+    next.adventure.activeLead = null;
+    return {
+      ok: true,
+      state: next,
+      events: [
+        snapshotEvent(next, "discovery-disclosure-resolved", {
+          choice: command.choice,
+          nextLeadId: next.adventure.availableLeadId,
+          outsideClaimId: next.adventure.outsideClaims[0]?.id,
+          visibleDriftEventId: next.adventure.visibleDriftEvent?.id,
+        }),
+      ],
+    };
+  }
+  if (command.kind === "acknowledge-visible-drift") {
+    if (!state.adventure.visibleDriftEvent?.pendingAcknowledgement)
+      return reject(state, "visible-drift-not-pending");
+    next.adventure.visibleDriftEvent!.pendingAcknowledgement = false;
+    return {
+      ok: true,
+      state: next,
+      events: [
+        snapshotEvent(next, "visible-drift-acknowledged", {
+          driftEventId: next.adventure.visibleDriftEvent!.id,
+          revision: next.adventure.visibleDriftEvent!.revision,
+        }),
+      ],
+    };
+  }
   if (command.kind === "publish-reports") {
+    if (state.adventure.disclosurePending) return reject(state, "disclosure-required");
     if (state.phase !== "returned" || !state.expedition) return reject(state, "wrong-phase");
     const distinctIds = new Set(command.observationIds);
     if (command.observationIds.length > 3 || distinctIds.size > 3)
@@ -1293,6 +1895,19 @@ function fail(
   expedition.unbankedFindings = 0;
   expedition.commissionProgress.status = "failed";
   expedition.commissionProgress.findingsRewardGranted = false;
+  if (state.adventure.activeLead) {
+    state.adventure.activeLead.status = "failed";
+    if (state.adventure.encounter?.phase === "active") state.adventure.encounter.phase = "failed";
+    state.adventure.disclosurePending = false;
+    state.adventure.latestResolution = {
+      leadId: state.adventure.activeLead.leadId,
+      outcome: "failed",
+      clueIds: [...state.adventure.clueIds],
+      discoveryRecovered: state.adventure.discoveryRecovered,
+      capabilityUnlocked: state.adventure.capabilityIds.includes("capability-resonance-compass"),
+      disclosureChoice: null,
+    };
+  }
   state.latestExpeditionSummary = outcomeSummary(
     state,
     expedition,
@@ -1373,6 +1988,74 @@ export function calculateReturnReserve(
     }
   }
   return null;
+}
+function createAdventureProjection(state: CanonicalState): SafeAdventureProjection {
+  const hasCompass = state.adventure.capabilityIds.includes("capability-resonance-compass");
+  const onFollowupLead =
+    state.adventure.activeLead !== null &&
+    state.adventure.activeLead.leadId !== "lead-bell-beneath-north-mark";
+  return {
+    primaryLead: structuredClone(ADVENTURE_LEADS["lead-bell-beneath-north-mark"]),
+    availableLead: state.adventure.availableLeadId
+      ? structuredClone(ADVENTURE_LEADS[state.adventure.availableLeadId])
+      : null,
+    activeLead: structuredClone(state.adventure.activeLead),
+    aftermathOfRecentDrift:
+      !state.adventure.firstBellAdventureResolved ||
+      Boolean(state.adventure.visibleDriftEvent?.pendingAcknowledgement),
+    encounter: state.adventure.encounter
+      ? {
+          id: "encounter-bell-north-mark",
+          phase: state.adventure.encounter.phase,
+          instruction:
+            state.adventure.encounter.phase === "active"
+              ? "Resolve or withdraw from the Bell encounter before ordinary travel can continue."
+              : "The Bell encounter is resolved; return travel is available if the Expedition can continue.",
+          actions: encounterActionAffordances(state),
+        }
+      : null,
+    clues: state.adventure.clueIds.map((id) => ({
+      ...ADVENTURE_CLUES[id],
+      private: !state.adventure.discoveryPublic,
+    })),
+    discoveries: state.adventure.discoveryRecovered
+      ? [
+          {
+            id: "discovery-resonant-waystone-fragment",
+            title: "Resonant Waystone Fragment",
+            interpretation: state.adventure.clueIds.includes("clue-worked-stone")
+              ? "Worked shelf debris supports the interpretation that the fragment came from a constructed submerged waystone."
+              : "The fragment came from a resonant submerged structure; its makers remain unknown.",
+            public: state.adventure.discoveryPublic,
+          } satisfies AdventureDiscovery,
+        ]
+      : [],
+    capabilities: hasCompass ? [structuredClone(RESONANCE_COMPASS)] : [],
+    disclosurePending: state.adventure.disclosurePending,
+    outsideClaims: state.adventure.outsideClaims.map((claim) => ({
+      ...structuredClone(claim),
+      age: state.logicalTime - claim.publishedAt,
+      potentiallyStale:
+        (state.world.subjectLastChangedRevision[claim.subjectId] ?? 0) > claim.observedRevision,
+    })),
+    publicResonanceEvidenceState:
+      state.adventure.outsideClaims.length === 0
+        ? "unknown"
+        : state.adventure.publicAnnotations.some((annotation) => annotation.subjectId === "r-nd")
+          ? "conflicting-values"
+          : "single-value",
+    publicAnnotations: structuredClone(state.adventure.publicAnnotations),
+    privateAcousticRouteClue:
+      hasCompass && (state.adventure.privateAcousticRouteClue || onFollowupLead)
+        ? {
+            routeId: "r-nd",
+            summary:
+              "The recovered fragment's acoustic signature is consistent with r-nd, not Mara's r-nr claim; this says nothing about route hazard, condition, or safety.",
+          }
+        : null,
+    visibleDriftEvent: structuredClone(state.adventure.visibleDriftEvent),
+    latestResolution: structuredClone(state.adventure.latestResolution),
+  };
 }
 export function createPlayerProjection(
   state: CanonicalState,
@@ -1463,5 +2146,6 @@ export function createPlayerProjection(
     observations: [...observations.values()],
     atlas,
     traces: structuredClone(state.traces),
+    adventure: createAdventureProjection(state),
   };
 }

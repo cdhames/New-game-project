@@ -5,6 +5,7 @@ import {
   LEGACY_LOCAL_RECORD_KEY,
   LEGACY_LOCAL_RECORD_KEY_V2,
   LEGACY_LOCAL_RECORD_KEY_V3,
+  LEGACY_LOCAL_RECORD_KEY_V4,
   LOCAL_RECORD_KEY,
   type AuthorityLoadResult,
   type StoragePort,
@@ -70,6 +71,7 @@ export function App({
     storage.removeItem(LEGACY_LOCAL_RECORD_KEY);
     storage.removeItem(LEGACY_LOCAL_RECORD_KEY_V2);
     storage.removeItem(LEGACY_LOCAL_RECORD_KEY_V3);
+    storage.removeItem(LEGACY_LOCAL_RECORD_KEY_V4);
     setSelectedReports([]);
     setSelectedInstruments(["sounding-line", "weather-glass"]);
     setSelectedCommissionId(null);
